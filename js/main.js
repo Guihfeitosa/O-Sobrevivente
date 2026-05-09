@@ -82,7 +82,7 @@ const RARITIES = [
 
 function generateRandomWeapon(luck = 0) {
     const rSecret = Math.random();
-    const secretChance = 0.0001 + (luck * 0.001); 
+    const secretChance = 0.001 + (luck * 0.001); 
     if (rSecret < secretChance) {
         return {
             id: Math.random().toString(36).substr(2, 9),
@@ -375,7 +375,7 @@ class Enemy {
         else if (type === 'cultist') { this.radius = 18; this.speed = 1.2; this.hp = 25 * hpMult; }
         else if (type === 'brute') { this.radius = 28; this.speed = 0.8; this.hp = 100 * hpMult; }
         else if (type === 'fast') { this.radius = 12; this.speed = 2.8; this.hp = 4 * hpMult; }
-        else if (type === 'boss') { this.radius = 50; this.speed = 1.0; this.hp = 40000 * hpMult; }
+        else if (type === 'boss') { this.radius = 65; this.speed = 1.3; this.hp = 150000 * hpMult; }
     }
     update(targetX, targetY, speedMultiplier, barricades) {
         let tx = targetX, ty = targetY; let speed = this.speed * speedMultiplier;
@@ -665,7 +665,7 @@ class GameEngine {
 
         this.player.update();
         
-        if (this.kills > 0 && Math.floor(this.kills / 1000) > this.bossesSpawned) {
+        if (this.kills > 0 && Math.floor(this.kills / 3000) > this.bossesSpawned) {
             this.bossesSpawned++;
             const angle = Math.random() * Math.PI * 2; const dist = Math.max(canvas.width, canvas.height) / 2 + 100;
             const x = this.player.x + Math.cos(angle) * dist; const y = this.player.y + Math.sin(angle) * dist;
