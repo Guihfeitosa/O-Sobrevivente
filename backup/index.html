@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Survivors - The Resistance</title>
+    <link rel="stylesheet" href="css/style.css?v=2">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="hud">
+            <div id="topHud">
+                <div id="scoreDisplay">Kills: 0</div>
+                <div id="levelDisplay">Lvl: 1</div>
+                <div id="suppliesDisplay">Madeira: 0</div>
+            </div>
+            <div id="subHud">
+                Espaço: Barricada | I: Inventário
+            </div>
+            <div id="bars">
+                <div class="bar-container"><div id="hpBar" class="bar fill-red"></div></div>
+                <div class="bar-container"><div id="xpBar" class="bar fill-blue"></div></div>
+            </div>
+        </div>
+        
+        <!-- Start Screen -->
+        <div id="startScreen" class="overlay">
+            <h1>Mini Survivors</h1>
+            <p>WASD/Setas para mover.</p>
+            <p>Tiros e Molotov são automáticos!</p>
+            <button id="startBtn">Start Game</button>
+        </div>
+
+        <!-- Level Up Screen -->
+        <div id="levelUpScreen" class="overlay hidden">
+            <h1 class="level-title">LEVEL UP!</h1>
+            <p>Escolha um aprimoramento:</p>
+            <div id="upgradesContainer"></div>
+        </div>
+
+        <!-- Inventory Screen -->
+        <div id="inventoryScreen" class="overlay hidden">
+            <h1 style="color: #fff; text-shadow: 4px 4px 0 #000;">INVENTÁRIO</h1>
+            <p>Armas Coletadas (Clique para equipar):</p>
+            <button id="fuseAllBtn" style="margin-bottom: 15px; font-size: 14px; padding: 10px 20px; border-color: #9b59b6; color: #9b59b6;">Fundir Tudo (3x Iguais)</button>
+            <div id="weaponsGrid"></div>
+            <button id="closeInventoryBtn">Voltar ao Jogo</button>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameOverScreen" class="overlay hidden">
+            <h1>GAME OVER</h1>
+            <p>Kills: <span id="finalScore">0</span></p>
+            <p>Level: <span id="finalLevel">1</span></p>
+            <button id="restartBtn">Restart</button>
+        </div>
+    </div>
+    <script src="js/main.js"></script>
+</body>
+</html>

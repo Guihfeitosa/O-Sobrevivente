@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>O Sobrevivente</title>
+    <link rel="stylesheet" href="css/style.css?v=3">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="hud">
+            <div id="topHud">
+                <div id="scoreDisplay">Kills: 0</div>
+                <div id="levelDisplay">Lvl: 1</div>
+                <div id="suppliesDisplay">Madeira: 0</div>
+            </div>
+            <div id="subHud">
+                Espaço: Barricada | I: Inventário
+            </div>
+            <div id="bars">
+                <div class="bar-container"><div id="hpBar" class="bar fill-red"></div></div>
+                <div class="bar-container"><div id="xpBar" class="bar fill-blue"></div></div>
+            </div>
+        </div>
+        
+        <!-- Start Screen -->
+        <div id="startScreen" class="overlay">
+            <div class="menu-container">
+                <h1 class="glitch-title">O SOBREVIVENTE</h1>
+                <div class="instructions">
+                    <p>WASD / Setas para mover</p>
+                    <p>Espaço para construir Barricadas</p>
+                    <p>Tiros e habilidades são automáticos</p>
+                </div>
+                <button id="startBtn" class="primary-btn">INICIAR MISSÃO</button>
+            </div>
+        </div>
+
+        <!-- Level Up Screen -->
+        <div id="levelUpScreen" class="overlay hidden">
+            <h1 class="level-title">LEVEL UP!</h1>
+            <p>Escolha um aprimoramento:</p>
+            <div id="upgradesContainer"></div>
+        </div>
+
+        <!-- Inventory Screen -->
+        <div id="inventoryScreen" class="overlay hidden">
+            <h1 style="color: #fff; text-shadow: 4px 4px 0 #000;">INVENTÁRIO</h1>
+            <p>Armas Coletadas (Clique para equipar):</p>
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <button id="fuseAllBtn" style="font-size: 14px; padding: 10px 20px; border-color: #9b59b6; color: #9b59b6;">Fundir Tudo (3x Iguais)</button>
+                <button id="equipBestBtn" style="font-size: 14px; padding: 10px 20px; border-color: #f1c40f; color: #f1c40f;">Equipar Melhor</button>
+            </div>
+            <div id="weaponsGrid"></div>
+            <button id="closeInventoryBtn">Voltar ao Jogo</button>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameOverScreen" class="overlay hidden">
+            <h1>GAME OVER</h1>
+            <p>Kills: <span id="finalScore">0</span></p>
+            <p>Level: <span id="finalLevel">1</span></p>
+            <button id="restartBtn">Restart</button>
+        </div>
+    </div>
+    <script src="js/main.js"></script>
+</body>
+</html>
