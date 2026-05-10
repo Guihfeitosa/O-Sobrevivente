@@ -91,8 +91,11 @@ let metaUpgrades = {
     luck: savedMeta.luck || 0,
     damage: savedMeta.damage || 0,
     xp: savedMeta.xp || 0,
+    scoreMult: savedMeta.scoreMult || 0,
     activeTitle: savedMeta.activeTitle || null
 };
+
+let savedItems = JSON.parse(localStorage.getItem('ms_player_items')) || [];
 
 const TITLES = [
     { id: 'v_sangrento', name: 'Vigilante Sangrento', desc: '+15% Dano', req: 5000, bonus: { damage: 0.15 } },
@@ -127,7 +130,8 @@ const SHOP_ITEMS = [
     { id: 'speed', name: 'Agilidade', desc: '+5% Velocidade', cost: 1000 },
     { id: 'luck', name: 'Sorte Grande', desc: '+2% Sorte Base', cost: 1500 },
     { id: 'damage', name: 'Músculos', desc: '+10% Dano Base', cost: 2000 },
-    { id: 'xp', name: 'Aprendizagem', desc: '+10% XP Global', cost: 2500 }
+    { id: 'xp', name: 'Aprendizagem', desc: '+10% XP Global', cost: 2500 },
+    { id: 'scoreMult', name: 'Fama de Herói', desc: '+20% Abates Ganhos', cost: 5000 }
 ];
 
 function resizeCanvas() {
@@ -440,9 +444,9 @@ class Player {
 
         this.applyTitleBonus();
 
-        // Special Items
-        this.items = []; // { name, type, count }
-        this.statMultiplier = 1.0;
+        // Special Items (Loaded from persistent storage)
+        this.items = JSON.parse(JSON.stringify(savedItems)); 
+        this.updateMultipliers();
     }
 
     addSpecialItem(name) {
@@ -464,15 +468,31 @@ class Player {
             else this.items.push({ name: 'Composto Definitivo', count: 1 });
         }
 
+        // Logic for Composto Definitivo transformation
+        let def = this.items.find(i => i.name === 'Composto Definitivo');
+        if (def && def.count >= 5) {
+            def.count -= 5;
+            if (def.count <= 0) this.items.splice(this.items.indexOf(def), 1);
+            
+            let abs = this.items.find(i => i.name === 'Preparo Absoluto');
+            if (abs) abs.count++;
+            else this.items.push({ name: 'Preparo Absoluto', count: 1 });
+        }
+
         this.updateMultipliers();
+        // Save items permanently
+        savedItems = JSON.parse(JSON.stringify(this.items));
+        localStorage.setItem('ms_player_items', JSON.stringify(savedItems));
+        
         // Heal to full on power up
         this.hp = this.getStat(this.maxHp);
     }
 
     updateMultipliers() {
         this.statMultiplier = 1.0;
-        if (this.items.find(i => i.name === 'Composto Super')) this.statMultiplier = 10.0;
-        if (this.items.find(i => i.name === 'Composto Definitivo')) this.statMultiplier = 1000.0;
+        if (this.items.find(i => i.name === 'Preparo Absoluto')) this.statMultiplier = 10000.0;
+        else if (this.items.find(i => i.name === 'Composto Definitivo')) this.statMultiplier = 1000.0;
+        else if (this.items.find(i => i.name === 'Composto Super')) this.statMultiplier = 10.0;
     }
 
     applyTitleBonus() {
@@ -506,7 +526,8 @@ class Player {
 
     getStat(val, isSpeed = false) {
         if (isSpeed) {
-            // Speed cap for playability: Super (2x), Definitivo (4x)
+            // Speed cap for playability: Super (2x), Definitivo (4x), Preparo (8x)
+            if (this.statMultiplier === 10000) return val * 8;
             if (this.statMultiplier === 1000) return val * 4;
             if (this.statMultiplier === 10) return val * 2;
             return val;
@@ -699,15 +720,32 @@ class Enemy {
             ctx.fillStyle = this.burnTimer > 0 ? '#f1948a' : '#c0392b'; ctx.beginPath(); ctx.moveTo(-8, 12); ctx.lineTo(16, 0); ctx.lineTo(-8, -12); ctx.fill();
             ctx.fillStyle = '#f1c40f'; ctx.beginPath(); ctx.arc(6, -2, 2, 0, Math.PI*2); ctx.fill();
         } else if (this.type === 'boss') {
-            ctx.fillStyle = this.burnTimer > 0 ? '#fff' : '#000';
-            ctx.beginPath(); ctx.arc(0, -10, 45, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#e74c3c';
-            ctx.beginPath(); ctx.moveTo(-35, -35); ctx.lineTo(-45, -70); ctx.lineTo(-15, -50); ctx.fill();
-            ctx.beginPath(); ctx.moveTo(35, -35); ctx.lineTo(45, -70); ctx.lineTo(15, -50); ctx.fill();
-            ctx.fillStyle = '#ff0000'; ctx.shadowBlur = 30; ctx.shadowColor = '#ff0000';
-            ctx.beginPath(); ctx.arc(-15, -20, 10, 0, Math.PI*2); ctx.fill();
-            ctx.beginPath(); ctx.arc(15, -20, 10, 0, Math.PI*2); ctx.fill();
-            ctx.shadowBlur = 0;
+            if (this.isMega) {
+                // Sovereign Mega Boss Appearance
+                ctx.shadowBlur = 30; ctx.shadowColor = '#f1c40f';
+                ctx.fillStyle = '#2c3e50'; ctx.beginPath(); ctx.arc(0, 0, this.radius, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 5; ctx.stroke();
+                
+                // Glowing Eyes
+                ctx.fillStyle = '#00ffff'; 
+                ctx.beginPath(); ctx.arc(-15, -10, 8, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(15, -10, 8, 0, Math.PI * 2); ctx.fill();
+                
+                // Crown detail
+                ctx.fillStyle = '#f1c40f';
+                ctx.beginPath(); ctx.moveTo(-25, -45); ctx.lineTo(0, -65); ctx.lineTo(25, -45); ctx.fill();
+                ctx.shadowBlur = 0;
+            } else {
+                ctx.fillStyle = this.burnTimer > 0 ? '#fff' : '#000';
+                ctx.beginPath(); ctx.arc(0, -10, this.radius * 0.9, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#e74c3c';
+                ctx.beginPath(); ctx.moveTo(-35, -35); ctx.lineTo(-45, -70); ctx.lineTo(-15, -50); ctx.fill();
+                ctx.beginPath(); ctx.moveTo(35, -35); ctx.lineTo(45, -70); ctx.lineTo(15, -50); ctx.fill();
+                ctx.fillStyle = '#ff0000'; ctx.shadowBlur = 30; ctx.shadowColor = '#ff0000';
+                ctx.beginPath(); ctx.arc(-15, -20, 10, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(15, -20, 10, 0, Math.PI*2); ctx.fill();
+                ctx.shadowBlur = 0;
+            }
         }
         ctx.restore();
     }
@@ -801,19 +839,31 @@ class GameEngine {
             const div = document.createElement('div');
             div.className = 'weapon-card';
             div.style.minWidth = '140px';
-            const isDivino = item.name.includes('Definitivo');
-            div.style.borderColor = isDivino ? '#00d2ff' : '#f1c40f';
-            div.style.boxShadow = isDivino ? '0 0 20px #00d2ff' : '0 0 10px #f1c40f';
             
-            const isActive = (isDivino && this.player.statMultiplier === 1000) || (!isDivino && this.player.statMultiplier === 10);
-            const itemRarityColor = isDivino ? '#00d2ff' : '#f1c40f';
-            const itemRarityName = isDivino ? 'DEFINITIVO' : 'SUPER';
+            let color = '#f1c40f';
+            let rank = 'SUPER';
+            let activeCheck = (this.player.statMultiplier === 10);
 
-            div.innerHTML = `<h4 style="font-size:10px; color:${div.style.borderColor}; margin-bottom:5px;">${item.name}</h4>
-                             <p style="font-size:8px; font-weight:bold; color:${itemRarityColor}; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px; display:inline-block; margin-bottom:5px;">${itemRarityName}</p>
+            if (item.name.includes('Definitivo')) {
+                color = '#00d2ff';
+                rank = 'DEFINITIVO';
+                activeCheck = (this.player.statMultiplier === 1000);
+            } else if (item.name.includes('Absoluto')) {
+                color = '#ff0000';
+                rank = 'ABSOLUTE';
+                activeCheck = (this.player.statMultiplier === 10000);
+                div.style.boxShadow = '0 0 20px #ff0000';
+            } else {
+                div.style.boxShadow = '0 0 10px ' + color;
+            }
+            
+            div.style.borderColor = color;
+
+            div.innerHTML = `<h4 style="font-size:10px; color:${color}; margin-bottom:5px;">${item.name}</h4>
+                             <p style="font-size:8px; font-weight:bold; color:${color}; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px; display:inline-block; margin-bottom:5px;">${rank}</p>
                              <p style="font-size:8px; margin:5px 0;">Quantidade: ${item.count}</p>
-                             <p style="font-size:9px; color:${isActive ? '#2ecc71' : '#555'}; font-weight:bold;">
-                                ${isActive ? '● ATIVO' : '○ RESERVA'}
+                             <p style="font-size:9px; color:${activeCheck ? '#2ecc71' : '#555'}; font-weight:bold;">
+                                ${activeCheck ? '● ATIVO' : '○ RESERVA'}
                              </p>`;
             itemsGrid.appendChild(div);
         });
@@ -1463,7 +1513,15 @@ class GameEngine {
     }
 
     gameOver() {
-        this.state = 'GAMEOVER'; finalScoreDisplay.innerText = this.kills; finalLevelDisplay.innerText = this.level;
+        this.state = 'GAMEOVER'; 
+        
+        // Apply Score Multiplier (Meta-progression only)
+        const earnedKills = Math.floor(this.kills * (1 + metaUpgrades.scoreMult * 0.2));
+        totalKills += earnedKills;
+        saveMeta();
+
+        finalScoreDisplay.innerText = `${this.kills} (+${earnedKills - this.kills} Bonus)`; 
+        finalLevelDisplay.innerText = this.level;
         gameOverScreen.style.display = 'flex';
         gameOverScreen.classList.remove('hidden'); screenShake = 15;
     }
@@ -1489,6 +1547,64 @@ muteBtn.addEventListener('click', (e) => {
     muteBtn.innerText = enabled ? "🔇 MUTE" : "🔊 UNMUTE";
 });
 speedBtn.addEventListener('click', (e) => { e.target.blur(); game.toggleSpeed(); });
+
+// Index Logic
+const indexScreen = document.getElementById('indexScreen');
+const indexContent = document.getElementById('indexContent');
+const openIndexBtn = document.getElementById('openIndexBtn');
+const closeIndexBtn = document.getElementById('closeIndexBtn');
+
+openIndexBtn.onclick = () => {
+    indexScreen.classList.remove('hidden');
+    showIndexTab('rarities');
+};
+closeIndexBtn.onclick = () => indexScreen.classList.add('hidden');
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.onclick = () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        showIndexTab(btn.dataset.tab);
+    };
+});
+
+function showIndexTab(tab) {
+    let html = '';
+    if (tab === 'rarities') {
+        html = '<h3>Raridades e Chances</h3><table style="width:100%; border-collapse:collapse;">';
+        html += '<tr style="border-bottom:1px solid #555;"><th>Raridade</th><th>Dano</th><th>Chance</th></tr>';
+        const chances = ["60%", "25%", "10%", "4%", "0.8%", "0.15%", "0.04%", "0.008%", "0.0015%", "0.0004%", "Especial"];
+        RARITIES.forEach((r, i) => {
+            html += `<tr style="color:${r.color};"><td>${r.name}</td><td>${r.mult}x</td><td>${chances[i]}</td></tr>`;
+        });
+        html += '</table>';
+    } else if (tab === 'weapons') {
+        html = '<h3>Arsenal de Armas</h3>';
+        const weapons = [
+            { n: 'Pistola', d: '10', f: 'Média', s: 'Padrão' },
+            { n: 'Shotgun', d: '8x5', f: 'Lenta', s: 'Leque de 5 tiros' },
+            { n: 'Minigun', d: '12', f: 'Extrema', s: 'Fogo rápido' },
+            { n: 'RPG', d: '45', f: 'Muito Lenta', s: 'Explosão em área' },
+            { n: 'Plasma', d: '60', f: 'Média', s: 'Atravessa inimigos' },
+            { n: 'Acelerador', d: '150', f: 'Rápida', s: 'Raio linear veloz' },
+            { n: 'Mjolnir', d: '5.000', f: 'Lenta', s: 'Raio de trovão' },
+            { n: 'Laser Patriota', d: '250.000', f: 'Contínuo', s: 'Derrete tudo (ABSOLUTE)' }
+        ];
+        weapons.forEach(w => {
+            html += `<div style="margin-bottom:10px; border-left:3px solid #e67e22; padding-left:10px;">
+                        <b style="color:#e67e22">${w.n}</b><br>Dano: ${w.d} | Cadência: ${w.f}<br>Efeito: ${w.s}
+                     </div>`;
+        });
+    } else if (tab === 'obtain') {
+        html = '<h3>Como Obter Itens</h3>';
+        html += `<p><b>Armas:</b> Dropam de qualquer inimigo. A chance de raridades altas é extremamente baixa.</p>
+                 <p><b>Composto Super:</b> Dropa de Bosses comuns (3k+ kills).</p>
+                 <p><b>Composto Definitivo:</b> Fusão de 5 Compostos Super ou drop raro do Mega Boss.</p>
+                 <p><b>Preparo Absoluto:</b> Fusão de 5 Compostos Definitivos. Garante 10.000x de status.</p>
+                 <p><b>Laser Patriota:</b> Drop único e exclusivo do <b>Mega Boss (O Soberano)</b> aos 20k kills.</p>`;
+    }
+    indexContent.innerHTML = html;
+}
 
 game.updateMenuHUD();
 

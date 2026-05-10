@@ -47,9 +47,10 @@
                     <p>Espaço para construir Barricadas</p>
                     <p>Tiros e habilidades são automáticos</p>
                 </div>
-                <div style="display: flex; gap: 10px; justify-content: center;">
+                <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
                     <button id="startBtn" class="primary-btn">INICIAR MISSÃO</button>
                     <button id="openShopBtn" class="primary-btn" style="background: #8e44ad; border-color: #9b59b6;">LOJA</button>
+                    <button id="openIndexBtn" class="primary-btn" style="background: #34495e; border-color: #2c3e50;">GUIA</button>
                 </div>
                 <p id="totalKillsDisplay" style="margin-top: 15px; font-size: 12px; color: #f1c40f;">Abates Totais: 0</p>
             </div>
@@ -122,6 +123,20 @@
                 <button id="restartBtn">Restart</button>
                 <button id="menuBtn" style="background: #34495e; border-color: #2c3e50;">Menu</button>
             </div>
+        </div>
+
+        <!-- Survivor Index Screen -->
+        <div id="indexScreen" class="overlay hidden">
+            <h2 style="color: #e67e22; margin-bottom: 10px; text-shadow: 2px 2px #000;">GUIA DO SOBREVIVENTE</h2>
+            <div id="indexTabs" style="display: flex; gap: 5px; margin-bottom: 10px; justify-content: center;">
+                <button class="tab-btn" data-tab="rarities" style="padding: 10px; font-size: 8px;">Raridades</button>
+                <button class="tab-btn" data-tab="weapons" style="padding: 10px; font-size: 8px;">Armas</button>
+                <button class="tab-btn" data-tab="obtain" style="padding: 10px; font-size: 8px;">Obtenção</button>
+            </div>
+            <div id="indexContent" style="background: rgba(0,0,0,0.8); padding: 15px; border: 2px solid #e67e22; width: 85%; max-width: 600px; height: 350px; overflow-y: auto; text-align: left; font-size: 10px; line-height: 1.6;">
+                <!-- Content injected via JS -->
+            </div>
+            <button id="closeIndexBtn" style="margin-top: 15px; background: #c0392b;">Fechar</button>
         </div>
 
         </div>
