@@ -19,6 +19,73 @@ const closeInventoryBtn = document.getElementById('closeInventoryBtn');
 const upgradesContainer = document.getElementById('upgradesContainer');
 const weaponsGrid = document.getElementById('weaponsGrid');
 const equipBestBtn = document.getElementById('equipBestBtn');
+const menuBtn = document.getElementById('menuBtn');
+const shopScreen = document.getElementById('shopScreen');
+const shopGrid = document.getElementById('shopGrid');
+const openShopBtn = document.getElementById('openShopBtn');
+const closeShopBtn = document.getElementById('closeShopBtn');
+const totalKillsDisplay = document.getElementById('totalKillsDisplay');
+const shopKills = document.getElementById('shopKills');
+
+// --- Audio System (Synthesized) ---
+class SoundManager {
+    constructor() {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.enabled = true;
+    }
+    play(type) {
+        if (!this.enabled || this.ctx.state === 'suspended') return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        
+        let now = this.ctx.currentTime;
+        if (type === 'shoot') {
+            osc.type = 'square'; osc.frequency.setValueAtTime(400, now); osc.frequency.exponentialRampToValueAtTime(10, now + 0.1);
+            gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+            osc.start(); osc.stop(now + 0.1);
+        } else if (type === 'explosion') {
+            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, now); osc.frequency.linearRampToValueAtTime(1, now + 0.5);
+            gain.gain.setValueAtTime(0.3, now); gain.gain.linearRampToValueAtTime(0, now + 0.5);
+            osc.start(); osc.stop(now + 0.5);
+        } else if (type === 'hit') {
+            osc.type = 'sine'; osc.frequency.setValueAtTime(150, now);
+            gain.gain.setValueAtTime(0.1, now); gain.gain.linearRampToValueAtTime(0, now + 0.05);
+            osc.start(); osc.stop(now + 0.05);
+        } else if (type === 'levelup') {
+            osc.type = 'triangle'; 
+            [440, 554, 659, 880].forEach((f, i) => {
+                osc.frequency.setValueAtTime(f, now + i * 0.1);
+            });
+            gain.gain.setValueAtTime(0.1, now); gain.gain.linearRampToValueAtTime(0.1, now + 0.4);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+            osc.start(); osc.stop(now + 0.5);
+        } else if (type === 'heal') {
+            osc.type = 'sine'; osc.frequency.setValueAtTime(200, now); osc.frequency.exponentialRampToValueAtTime(800, now + 0.3);
+            gain.gain.setValueAtTime(0.1, now); gain.gain.linearRampToValueAtTime(0, now + 0.3);
+            osc.start(); osc.stop(now + 0.3);
+        }
+    }
+}
+const sounds = new SoundManager();
+
+// --- Persistence & Shop Data ---
+let totalKills = parseInt(localStorage.getItem('ms_total_kills')) || 0;
+let metaUpgrades = JSON.parse(localStorage.getItem('ms_meta_upgrades')) || {
+    hp: 0, speed: 0, luck: 0, damage: 0
+};
+
+const saveMeta = () => {
+    localStorage.setItem('ms_total_kills', totalKills);
+    localStorage.setItem('ms_meta_upgrades', JSON.stringify(metaUpgrades));
+};
+
+const SHOP_ITEMS = [
+    { id: 'hp', name: 'Resistência', desc: '+20 HP Base', cost: 500, perLevel: 20 },
+    { id: 'speed', name: 'Agilidade', desc: '+5% Velocidade', cost: 1000, perLevel: 0.2 },
+    { id: 'luck', name: 'Sorte Grande', desc: '+2% Sorte Base', cost: 1500, perLevel: 0.02 },
+    { id: 'damage', name: 'Músculos', desc: '+10% Dano Base', cost: 2000, perLevel: 0.1 }
+];
 
 function resizeCanvas() {
     canvas.width = window.innerWidth;
@@ -278,15 +345,22 @@ class Projectile {
 // --- Entities ---
 class Player {
     constructor(x, y) {
-        this.x = x; this.y = y; this.radius = 16; this.speed = 4; this.hp = 100; this.maxHp = 100;
+        this.x = x; this.y = y; this.radius = 16;
+        
+        // Apply Meta Upgrades
+        this.maxHp = 100 + (metaUpgrades.hp * 20);
+        this.hp = this.maxHp;
+        this.speed = 4 + (metaUpgrades.speed * 0.2);
+        this.luck = 0.05 + (metaUpgrades.luck * 0.02);
+        this.damageMultiplier = 1.0 + (metaUpgrades.damage * 0.1);
+        
         this.facingLeft = false; this.animTime = 0;
         
         // Stats
         this.baseShootRate = 25; this.shootRate = 25; this.shootCooldown = 0;
-        this.pierce = 0; this.luck = 0.05; 
-        this.magnetRadius = 30; // Magnet skill base radius
+        this.pierce = 0; 
+        this.magnetRadius = 30; 
         this.xpMultiplier = 1;
-        this.damageMultiplier = 1.0;
 
         // Weapons Inventory
         const defaultWeapon = { id: 'w1', name: 'Pistol Comum', type: 'Pistol', rarity: RARITIES[0], damage: BASE_DAMAGE['Pistol'], fireRateMod: 1 };
@@ -441,8 +515,9 @@ class GameEngine {
         this.level = 1; this.xp = 0; this.maxXp = 10; this.supplies = 0; this.bossesSpawned = 0; this.healsPerformed = 0;
         this.state = 'PLAY'; screenShake = 0;
         this.updateHUD();
-        startScreen.classList.add('hidden'); gameOverScreen.classList.add('hidden'); levelUpScreen.classList.add('hidden'); inventoryScreen.classList.add('hidden');
+        startScreen.classList.add('hidden'); gameOverScreen.classList.add('hidden'); levelUpScreen.classList.add('hidden'); inventoryScreen.classList.add('hidden'); shopScreen.classList.add('hidden');
         startScreen.style.display = 'none'; gameOverScreen.style.display = 'none';
+        if (sounds.ctx.state === 'suspended') sounds.ctx.resume();
     }
 
     updateHUD() {
@@ -610,6 +685,62 @@ class GameEngine {
         this.maxXp = this.maxXp + 20 + (this.level * 5); // Linear scaling
         
         this.updateHUD(); levelUpScreen.classList.add('hidden'); this.state = 'PLAY';
+        sounds.play('levelup');
+    }
+
+    openShop() {
+        this.state = 'SHOP'; shopScreen.classList.remove('hidden');
+        this.renderShop();
+    }
+
+    closeShop() {
+        this.state = 'MENU'; shopScreen.classList.add('hidden');
+        this.updateMenuHUD();
+    }
+
+    goToMenu() {
+        this.state = 'MENU';
+        gameOverScreen.style.display = 'none';
+        gameOverScreen.classList.add('hidden');
+        startScreen.style.display = 'flex';
+        startScreen.classList.remove('hidden');
+        this.updateMenuHUD();
+    }
+
+    updateMenuHUD() {
+        totalKillsDisplay.innerText = `Abates Totais: ${totalKills}`;
+        shopKills.innerText = `Abates Disponíveis: ${totalKills}`;
+    }
+
+    renderShop() {
+        shopGrid.innerHTML = '';
+        this.updateMenuHUD();
+        SHOP_ITEMS.forEach(item => {
+            const level = metaUpgrades[item.id];
+            const currentCost = item.cost * (level + 1);
+            const div = document.createElement('div');
+            div.className = 'upgrade-card';
+            div.style.width = '100%';
+            div.innerHTML = `
+                <h3 style="font-size:12px;">${item.name} (Nv. ${level})</h3>
+                <p style="font-size:10px;">${item.desc}</p>
+                <button class="primary-btn" style="padding:10px; font-size:10px; width:100%; margin-top:10px;" 
+                    ${totalKills < currentCost ? 'disabled' : ''}>
+                    Comprar: ${currentCost}
+                </button>
+            `;
+            const btn = div.querySelector('button');
+            btn.onclick = () => {
+                if (totalKills >= currentCost) {
+                    totalKills -= currentCost;
+                    metaUpgrades[item.id]++;
+                    saveMeta();
+                    this.renderShop();
+                    sounds.play('heal');
+                }
+            };
+            shopGrid.appendChild(div);
+        });
     }
 
     fireWeapon(tx, ty) {
@@ -652,6 +783,7 @@ class GameEngine {
 
         this.player.shootCooldown = this.player.shootRate * wpn.fireRateMod;
         this.player.muzzleTimer = 5;
+        sounds.play('shoot');
     }
 
     update() {
@@ -680,6 +812,7 @@ class GameEngine {
             this.player.hp = this.player.maxHp;
             this.updateHUD();
             this.particleSystem.spawn(this.player.x, this.player.y, '#2ecc71', 30, 2); // Green particles for heal
+            sounds.play('heal');
         }
 
         // Auto Shoot
@@ -728,6 +861,7 @@ class GameEngine {
                         }
                         p.active = false;
                         screenShake = 8;
+                        sounds.play('explosion');
                     } else {
                         if (p.hitEnemies.size > p.pierce) p.active = false;
                     }
@@ -750,8 +884,11 @@ class GameEngine {
 
                         this.enemies.splice(this.enemies.indexOf(e), 1);
                         this.kills += 1;
+                        totalKills += 1;
+                        saveMeta();
                         this.particleSystem.addBlood(e.x, e.y); this.particleSystem.spawn(e.x, e.y, '#aa0000', 15, 1.5);
-                        if (e.type === 'brute') screenShake = 8;
+                        if (e.type === 'brute') { screenShake = 8; sounds.play('explosion'); }
+                        else { sounds.play('hit'); }
                         this.updateHUD();
                     }
                     if(!p.active) break;
@@ -857,9 +994,14 @@ const fuseAllBtn = document.getElementById('fuseAllBtn');
 
 startBtn.addEventListener('click', (e) => { e.target.blur(); game.reset(); });
 restartBtn.addEventListener('click', (e) => { e.target.blur(); game.reset(); });
+menuBtn.addEventListener('click', (e) => { e.target.blur(); game.goToMenu(); });
 closeInventoryBtn.addEventListener('click', (e) => { e.target.blur(); game.closeInventory(); });
 fuseAllBtn.addEventListener('click', (e) => { e.target.blur(); game.fuseAllWeapons(); });
 if(equipBestBtn) equipBestBtn.addEventListener('click', (e) => { e.target.blur(); game.equipBestWeapon(); });
+openShopBtn.addEventListener('click', (e) => { e.target.blur(); game.openShop(); });
+closeShopBtn.addEventListener('click', (e) => { e.target.blur(); game.closeShop(); });
+
+game.updateMenuHUD();
 
 function gameLoop() { 
     try {

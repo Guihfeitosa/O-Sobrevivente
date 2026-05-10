@@ -34,7 +34,11 @@
                     <p>Espaço para construir Barricadas</p>
                     <p>Tiros e habilidades são automáticos</p>
                 </div>
-                <button id="startBtn" class="primary-btn">INICIAR MISSÃO</button>
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button id="startBtn" class="primary-btn">INICIAR MISSÃO</button>
+                    <button id="openShopBtn" class="primary-btn" style="background: #8e44ad; border-color: #9b59b6;">LOJA</button>
+                </div>
+                <p id="totalKillsDisplay" style="margin-top: 15px; font-size: 12px; color: #f1c40f;">Abates Totais: 0</p>
             </div>
         </div>
 
@@ -57,12 +61,25 @@
             <button id="closeInventoryBtn">Voltar ao Jogo</button>
         </div>
 
+        <!-- Shop Screen -->
+        <div id="shopScreen" class="overlay hidden">
+            <h1 style="color: #f1c40f; text-shadow: 4px 4px 0 #000;">LOJA DE UPGRADES</h1>
+            <p id="shopKills">Abates Disponíveis: 0</p>
+            <div id="shopGrid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; max-width: 600px; margin: 20px auto;">
+                <!-- Upgrades will be generated here -->
+            </div>
+            <button id="closeShopBtn">Voltar ao Menu</button>
+        </div>
+
         <!-- Game Over Screen -->
         <div id="gameOverScreen" class="overlay hidden">
             <h1>GAME OVER</h1>
             <p>Kills: <span id="finalScore">0</span></p>
             <p>Level: <span id="finalLevel">1</span></p>
-            <button id="restartBtn">Restart</button>
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button id="restartBtn">Restart</button>
+                <button id="menuBtn" style="background: #34495e; border-color: #2c3e50;">Menu</button>
+            </div>
         </div>
     </div>
     <script src="js/main.js"></script>
