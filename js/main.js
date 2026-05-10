@@ -604,7 +604,11 @@ class GameEngine {
         const sortedWeapons = [...this.player.weapons].sort((a, b) => {
             if (sortBy === 'name') return a.name.localeCompare(b.name);
             if (sortBy === 'damage') return b.damage - a.damage;
-            if (sortBy === 'rarity') return b.rarity.level - a.rarity.level;
+            if (sortBy === 'rarity') {
+                // Primary: Rarity Level, Secondary: Damage
+                if (b.rarity.level !== a.rarity.level) return b.rarity.level - a.rarity.level;
+                return b.damage - a.damage;
+            }
             return 0;
         });
         
@@ -647,7 +651,10 @@ class GameEngine {
             }
         }
         this.player.equippedIndex = bestIdx;
-        if (this.state === 'INVENTORY') this.openInventory();
+        if (this.state === 'INVENTORY') {
+            this.renderInventory();
+            this.renderStats();
+        }
     }
 
     fuseAllWeapons() {
@@ -704,6 +711,10 @@ class GameEngine {
             }
         }
         this.equipBestWeapon();
+        if (this.state === 'INVENTORY') {
+            this.renderInventory();
+            this.renderStats();
+        }
     }
 
     triggerLevelUp() {
