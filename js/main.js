@@ -28,12 +28,23 @@ const totalKillsDisplay = document.getElementById('totalKillsDisplay');
 const shopKills = document.getElementById('shopKills');
 const statsGrid = document.getElementById('statsGrid');
 const sortSelect = document.getElementById('sortSelect');
+const itemsGrid = document.getElementById('itemsGrid');
+const muteBtn = document.getElementById('muteBtn');
+const speedBtn = document.getElementById('speedBtn');
+const bossHud = document.getElementById('bossHud');
+const bossHpBar = document.getElementById('bossHpBar');
 
 // --- Audio System (Synthesized) ---
 class SoundManager {
     constructor() {
         this.ctx = new (window.AudioContext || window.webkitAudioContext)();
         this.enabled = true;
+    }
+    toggle() {
+        this.enabled = !this.enabled;
+        if (!this.enabled) this.ctx.suspend();
+        else this.ctx.resume();
+        return this.enabled;
     }
     play(type) {
         if (!this.enabled || this.ctx.state === 'suspended') return;
@@ -79,8 +90,30 @@ let metaUpgrades = {
     speed: savedMeta.speed || 0,
     luck: savedMeta.luck || 0,
     damage: savedMeta.damage || 0,
-    xp: savedMeta.xp || 0
+    xp: savedMeta.xp || 0,
+    activeTitle: savedMeta.activeTitle || null
 };
+
+const TITLES = [
+    { id: 'v_sangrento', name: 'Vigilante Sangrento', desc: '+15% Dano', req: 5000, bonus: { damage: 0.15 } },
+    { id: 'e_supremo', name: 'Executor Supremo', desc: '+25% Dano, +10% Veloc.', req: 15000, bonus: { damage: 0.25, speed: 0.1 } },
+    { id: 't_imortal', name: 'Titã Imortal', desc: '+30% Vida, +20% Defesa', req: 30000, bonus: { hp: 0.30, defense: 20 } },
+    { id: 'a_caos', name: 'Arauto do Caos', desc: '+20% Crítico, +15% Dano', req: 50000, bonus: { crit: 20, damage: 0.15 } },
+    { id: 'r_vivo', name: 'Relâmpago Vivo', desc: '+30% Velocidade', req: 75000, bonus: { speed: 0.30 } },
+    { id: 'd_mundos', name: 'Devorador de Mundos', desc: '+50% Dano Boss', req: 100000, bonus: { bossDmg: 0.5 } },
+    { id: 'g_supremo', name: 'Guardião Supremo', desc: '+25% Defesa, Regen +2', req: 150000, bonus: { defense: 25, regen: 2 } },
+    { id: 'f_negro', name: 'Fantasma Negro', desc: '+30% Stealth, +15% Veloc.', req: 200000, bonus: { speed: 0.15, stealth: 0.3 } },
+    { id: 'l_ascendida', name: 'Lenda Ascendida', desc: '+20% Todos Atrib.', req: 300000, bonus: { all: 0.20 } },
+    { id: 'i_celestial', name: 'Imperador Celestial', desc: '+40% XP, +10% Sorte', req: 400000, bonus: { xp: 0.40, luck: 0.1 } },
+    { id: 'm_guerra', name: 'Mestre da Guerra', desc: '-25% Cooldown, +15% Dano', req: 500000, bonus: { cd: 0.25, damage: 0.15 } },
+    { id: 'p_absoluto', name: 'Predador Absoluto', desc: '+35% Crítico', req: 600000, bonus: { crit: 35 } },
+    { id: 's_divina', name: 'Sentinela Divina', desc: 'Escudo Ativo, +25% Vida', req: 700000, bonus: { shield: true, hp: 0.25 } },
+    { id: 'c_infernal', name: 'Conquistador Infernal', desc: 'Aura Flamejante, +20% Dano', req: 800000, bonus: { aura: true, damage: 0.20 } },
+    { id: 'o_intocavel', name: 'O Intocável', desc: '+25% Evasão', req: 900000, bonus: { evasion: 25 } },
+    { id: 'r_supremo', name: 'Rei Supremo', desc: '+30% Dano, +30% Def, +15% Vel', req: 1000000, bonus: { damage: 0.3, defense: 30, speed: 0.15 } },
+    { id: 'c_final', name: 'Ceifador Final', desc: 'Lifesteal 15%, +20% Dano', req: 2000000, bonus: { lifesteal: 0.15, damage: 0.20 } },
+    { id: 'd_absoluto', name: 'Deus Absoluto', desc: '+50% All Stats + Legendary', req: 5000000, bonus: { all: 0.50, legendary: true } }
+];
 
 const saveMeta = () => {
     try {
@@ -154,7 +187,8 @@ const RARITIES = [
     { name: 'Mítica', mult: 5, class: 'rarity-mitica', color: '#e74c3c', level: 4, xpBonus: 2.0 },
     { name: 'Secreta', mult: 15, class: 'rarity-secreta', color: '#00ffcc', level: 5, xpBonus: 3.0 },
     { name: 'PURO PODER', mult: 50, class: 'rarity-puro-poder', color: '#ffffff', level: 6, xpBonus: 5.0 },
-    { name: 'Semi-Deus', mult: 200, class: 'rarity-semi-deus', color: '#00d2ff', level: 7, xpBonus: 10.0 }
+    { name: 'Semi-Deus', mult: 200, class: 'rarity-semi-deus', color: '#00d2ff', level: 7, xpBonus: 10.0 },
+    { name: 'ABSOLUTE', mult: 10000, class: 'rarity-absolute', color: '#ff0000', level: 8, xpBonus: 100.0 }
 ];
 
 function generateRandomWeapon(luck = 0) {
@@ -178,6 +212,7 @@ function generateRandomWeapon(luck = 0) {
     if (r > 0.95) rarityIdx = 3;
     if (r > 0.99) rarityIdx = 4;
     
+    // Laser is only from Mega Boss
     const type = WEAPON_TYPES[Math.floor(Math.random() * WEAPON_TYPES.length)];
     const rarity = RARITIES[rarityIdx];
 
@@ -264,6 +299,12 @@ class Drop {
             ctx.fillRect(-8, -8, 16, 16);
             ctx.strokeStyle = '#00ffff'; ctx.lineWidth = 2; ctx.strokeRect(-8, -8, 16, 16);
             ctx.fillStyle = '#00ffff'; ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI*2); ctx.fill();
+        } else if (this.type === 'special_item') {
+            ctx.fillStyle = '#000'; ctx.shadowBlur = 25; ctx.shadowColor = '#00d2ff';
+            ctx.beginPath();
+            ctx.moveTo(0, -10); ctx.lineTo(10, 10); ctx.lineTo(-10, 10); ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = '#00d2ff'; ctx.lineWidth = 2; ctx.stroke();
+            ctx.fillStyle = '#00d2ff'; ctx.beginPath(); ctx.arc(0, 2, 3, 0, Math.PI*2); ctx.fill();
         }
         ctx.restore();
     }
@@ -315,22 +356,29 @@ class Projectile {
         if (Math.hypot(this.x - camera.x - canvas.width/2, this.y - camera.y - canvas.height/2) > 2000) this.active = false;
     }
     draw(ctx) {
-        if (this.type === 'Plasma' || this.type === 'Acelerador' || this.type === 'Mjolnir') {
+        if (this.type === 'Plasma' || this.type === 'Acelerador' || this.type === 'Mjolnir' || this.type === 'Laser') {
             ctx.save();
             let blur = 10, color = '#00ffcc', width = 6, inner = 2;
             if (this.type === 'Acelerador') { blur = 40; color = '#e056fd'; width = 25; inner = 10; }
             if (this.type === 'Mjolnir') { blur = 60; color = '#00d2ff'; width = 40; inner = 15; }
+            if (this.type === 'Laser') { blur = 80; color = '#ff0000'; width = 50; inner = 20; }
             
             ctx.shadowBlur = blur; 
             ctx.shadowColor = color;
             ctx.strokeStyle = color; 
             ctx.lineWidth = width; ctx.lineCap = 'round';
             ctx.beginPath(); 
-            ctx.moveTo(this.x - camera.x - this.vx*2, this.y - camera.y - this.vy*2);
-            ctx.lineTo(this.x - camera.x + this.vx*2, this.y - camera.y + this.vy*2);
-            if (this.type === 'Mjolnir') {
-                ctx.lineTo(this.x - camera.x + this.vx*3 + (Math.random()-0.5)*30, this.y - camera.y + this.vy*3 + (Math.random()-0.5)*30);
+            // Fill the gap caused by high speed by drawing back to the previous position
+            ctx.moveTo(this.x - camera.x - this.vx, this.y - camera.y - this.vy);
+            
+            let endX = this.x - camera.x;
+            let endY = this.y - camera.y;
+            
+            if (this.type === 'Mjolnir' || this.type === 'Laser') {
+                endX += this.vx * 0.5 + (Math.random()-0.5)*30;
+                endY += this.vy * 0.5 + (Math.random()-0.5)*30;
             }
+            ctx.lineTo(endX, endY);
             ctx.stroke();
             ctx.strokeStyle = '#ffffff'; ctx.lineWidth = inner; ctx.stroke();
             ctx.restore();
@@ -381,9 +429,89 @@ class Player {
         this.weapons = [defaultWeapon];
         this.equippedIndex = 0;
 
-        // Skills
         this.molotovCooldown = 600; this.molotovTimer = 0;
         this.doubleShotTimer = 0; this.muzzleTimer = 0;
+
+        // Title Stats
+        this.defense = 0; this.critChance = 0; this.evasion = 0; this.lifesteal = 0; this.regen = 0;
+        this.bossDmgBonus = 0; this.cooldownRed = 0; this.stealth = 0;
+        this.hasShield = false; this.hasAura = false; this.hasLegendary = false;
+        this.shieldActive = false; this.shieldCooldown = 0;
+
+        this.applyTitleBonus();
+
+        // Special Items
+        this.items = []; // { name, type, count }
+        this.statMultiplier = 1.0;
+    }
+
+    addSpecialItem(name) {
+        let item = this.items.find(i => i.name === name);
+        if (item) {
+            item.count++;
+        } else {
+            this.items.push({ name: name, count: 1 });
+        }
+
+        // Logic for Composto Super transformation
+        let semi = this.items.find(i => i.name === 'Composto Super');
+        if (semi && semi.count >= 5) {
+            semi.count -= 5;
+            if (semi.count <= 0) this.items.splice(this.items.indexOf(semi), 1);
+            
+            let div = this.items.find(i => i.name === 'Composto Definitivo');
+            if (div) div.count++;
+            else this.items.push({ name: 'Composto Definitivo', count: 1 });
+        }
+
+        this.updateMultipliers();
+        // Heal to full on power up
+        this.hp = this.getStat(this.maxHp);
+    }
+
+    updateMultipliers() {
+        this.statMultiplier = 1.0;
+        if (this.items.find(i => i.name === 'Composto Super')) this.statMultiplier = 10.0;
+        if (this.items.find(i => i.name === 'Composto Definitivo')) this.statMultiplier = 1000.0;
+    }
+
+    applyTitleBonus() {
+        if (!metaUpgrades.activeTitle) return;
+        const title = TITLES.find(t => t.id === metaUpgrades.activeTitle);
+        if (!title) return;
+        const b = title.bonus;
+        if (b.damage) this.damageMultiplier += b.damage;
+        if (b.speed) this.speed += b.speed * 4;
+        if (b.hp) { this.maxHp *= (1 + b.hp); this.hp = this.maxHp; }
+        if (b.defense) this.defense += b.defense;
+        if (b.crit) this.critChance += b.crit;
+        if (b.bossDmg) this.bossDmgBonus += b.bossDmg;
+        if (b.regen) this.regen += b.regen;
+        if (b.xp) this.xpMultiplier += b.xp;
+        if (b.luck) this.luck += b.luck; // Added missing individual luck bonus
+        if (b.cd) this.cooldownRed += b.cd;
+        if (b.stealth) this.stealth += b.stealth;
+        if (b.shield) this.hasShield = true;
+        if (b.aura) this.hasAura = true;
+        if (b.evasion) this.evasion += b.evasion;
+        if (b.lifesteal) this.lifesteal += b.lifesteal;
+        if (b.legendary) this.hasLegendary = true;
+        if (b.all) {
+            this.damageMultiplier += b.all;
+            this.speed += b.all * 4;
+            this.maxHp *= (1 + b.all); this.hp = this.maxHp;
+            this.luck += b.all * 0.1;
+        }
+    }
+
+    getStat(val, isSpeed = false) {
+        if (isSpeed) {
+            // Speed cap for playability: Super (2x), Definitivo (4x)
+            if (this.statMultiplier === 1000) return val * 4;
+            if (this.statMultiplier === 10) return val * 2;
+            return val;
+        }
+        return val * this.statMultiplier;
     }
 
     getEquipped() { return this.weapons[this.equippedIndex]; }
@@ -395,16 +523,41 @@ class Player {
         if (keys.a || keys.ArrowLeft) dx -= 1;
         if (keys.d || keys.ArrowRight) dx += 1;
 
-        if (dx !== 0 && dy !== 0) { const length = Math.sqrt(dx * dx + dy * dy); dx /= length; dy /= length; }
-
-        this.x += dx * this.speed; this.y += dy * this.speed;
-        if (dx < 0) this.facingLeft = true; if (dx > 0) this.facingLeft = false;
-        this.animTime += (dx !== 0 || dy !== 0) ? 0.25 : 0.05;
+        if (dx !== 0 || dy !== 0) {
+            const mag = Math.sqrt(dx * dx + dy * dy);
+            this.x += (dx / mag) * this.speed;
+            this.y += (dy / mag) * this.speed;
+            this.animTime += 0.25;
+            this.facingLeft = dx < 0;
+        }
 
         if (this.shootCooldown > 0) this.shootCooldown--;
         if (this.molotovTimer > 0) this.molotovTimer--;
         if (this.muzzleTimer > 0) this.muzzleTimer--;
         if (this.doubleShotTimer > 0) this.doubleShotTimer--;
+        
+        // Title: Regen
+        if (this.regen > 0 && game.frames % 60 === 0) {
+            this.hp = Math.min(this.getStat(this.maxHp), this.hp + this.regen);
+        }
+
+        // Title: Shield logic
+        if (this.hasShield) {
+            if (this.shieldCooldown > 0) this.shieldCooldown--;
+            if (this.hp < this.getStat(this.maxHp) * 0.25 && this.shieldCooldown <= 0) {
+                this.shieldActive = true; this.shieldTimer = 300; this.shieldCooldown = 3600;
+                sounds.play('levelup');
+            }
+            if (this.shieldActive) {
+                this.shieldTimer--;
+                if (this.shieldTimer <= 0) this.shieldActive = false;
+            }
+        }
+
+        // Title: Fire Aura
+        if (this.hasAura && game.frames % 40 === 0) {
+            game.fires.push(new FireArea(this.x, this.y, 80));
+        }
     }
 
     draw(ctx) {
@@ -427,6 +580,19 @@ class Player {
 
         ctx.fillStyle = this.doubleShotTimer > 0 ? '#f1c40f' : '#00ffff'; ctx.shadowBlur = 10; ctx.beginPath(); ctx.arc(7, -12, 3, 0, Math.PI * 2); ctx.fill();
         ctx.shadowBlur = 0; 
+        
+        // Draw Title Above Head
+        if (metaUpgrades.activeTitle) {
+            const title = TITLES.find(t => t.id === metaUpgrades.activeTitle);
+            if (title) {
+                ctx.save();
+                if (this.facingLeft) ctx.scale(-1, 1); // Unflip text if facing left
+                ctx.fillStyle = '#e67e22'; ctx.font = 'bold 14px Courier New';
+                ctx.textAlign = 'center'; ctx.shadowBlur = 5; ctx.shadowColor = '#000';
+                ctx.fillText(`[${title.name}]`, 0, -42);
+                ctx.restore();
+            }
+        }
         
         const wpn = this.getEquipped();
         if (wpn.type === 'Pistol') {
@@ -452,6 +618,23 @@ class Player {
             ctx.shadowBlur = 20; ctx.shadowColor = ctx.fillStyle;
             ctx.beginPath(); ctx.arc(35, 1, 6 + Math.random()*6, 0, Math.PI*2); ctx.fill();
         }
+
+        // Title: Draw Shield
+        if (this.shieldActive) {
+            ctx.restore(); ctx.save(); ctx.translate(this.x - camera.x, this.y - camera.y);
+            ctx.strokeStyle = '#00d2ff'; ctx.lineWidth = 4; ctx.beginPath();
+            ctx.arc(0, 0, this.radius + 15 + Math.sin(game.frames*0.1)*5, 0, Math.PI*2); ctx.stroke();
+            ctx.fillStyle = 'rgba(0, 210, 255, 0.2)'; ctx.fill();
+        }
+
+        // Title: Draw Legendary Effect
+        if (this.hasLegendary) {
+            ctx.restore(); ctx.save(); ctx.translate(this.x - camera.x, this.y - camera.y);
+            ctx.shadowBlur = 20; ctx.shadowColor = '#f1c40f';
+            ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(0, 0, this.radius + 20, 0, Math.PI*2); ctx.stroke();
+        }
+
         ctx.restore();
     }
 }
@@ -459,14 +642,26 @@ class Player {
 class Enemy {
     constructor(x, y, type, hpMult = 1) {
         this.x = x; this.y = y; this.type = type; this.facingLeft = false; this.animTime = 0; this.burnTimer = 0;
-        if (type === 'zombie') { this.radius = 16; this.speed = 1.6; this.hp = 12 * hpMult; }
-        else if (type === 'cultist') { this.radius = 18; this.speed = 1.2; this.hp = 25 * hpMult; }
-        else if (type === 'brute') { this.radius = 28; this.speed = 0.8; this.hp = 100 * hpMult; }
-        else if (type === 'fast') { this.radius = 12; this.speed = 2.8; this.hp = 4 * hpMult; }
-        else if (type === 'boss') { this.radius = 65; this.speed = 1.3; this.hp = 150000 * hpMult; }
+        if (type === 'zombie') { this.radius = 16; this.speed = 1.6; this.maxHp = 12 * hpMult; }
+        else if (type === 'cultist') { this.radius = 18; this.speed = 1.2; this.maxHp = 25 * hpMult; }
+        else if (type === 'brute') { this.radius = 28; this.speed = 0.8; this.maxHp = 100 * hpMult; }
+        else if (type === 'fast') { this.radius = 12; this.speed = 2.8; this.maxHp = 4 * hpMult; }
+        else if (type === 'boss') { this.radius = 48; this.speed = 1.1; this.maxHp = 80000 * hpMult; }
+        this.hp = this.maxHp;
     }
     update(targetX, targetY, speedMultiplier, barricades) {
-        let tx = targetX, ty = targetY; let speed = this.speed * speedMultiplier;
+        let tx = targetX, ty = targetY; 
+        let speed = this.speed * speedMultiplier;
+        
+        // Title: Stealth (Enemies move slower when far away)
+        if (game.player.stealth > 0) {
+            const dist = Math.hypot(this.x - targetX, this.y - targetY);
+            if (dist > 250) speed *= (1 - game.player.stealth);
+        }
+
+        // Nightmare speed boost at 10k kills
+        if (game.kills >= 10000) speed *= 1.5;
+        
         let attackingBarricade = null;
         for (let b of barricades) {
             if (Math.hypot(this.x - b.x, this.y - b.y) < this.radius + b.radius + 10) { attackingBarricade = b; break; }
@@ -520,18 +715,35 @@ class Enemy {
 
 // --- Main Engine ---
 class GameEngine {
-    constructor() { this.particleSystem = new ParticleSystem(); this.state = 'MENU'; this.bossesSpawned = 0; this.healsPerformed = 0; }
+    constructor() { 
+        this.particleSystem = new ParticleSystem(); this.state = 'MENU'; 
+        this.bossesSpawned = 0; this.healsPerformed = 0; 
+        this.timeScale = 1; this.megaBossSpawned = false;
+    }
 
     reset() {
         this.player = new Player(0, 0);
         this.enemies = []; this.projectiles = []; this.drops = []; this.barricades = []; this.fires = [];
         this.kills = 0; this.frames = 0; this.enemySpeedMultiplier = 1; this.spawnRate = 90;
         this.level = 1; this.xp = 0; this.maxXp = 10; this.supplies = 0; this.bossesSpawned = 0; this.healsPerformed = 0;
-        this.state = 'PLAY'; screenShake = 0;
+        this.state = 'PLAY'; screenShake = 0; this.timeScale = 1; this.megaBossSpawned = false;
         this.updateHUD();
+        this.updateSpeedBtn();
         startScreen.classList.add('hidden'); gameOverScreen.classList.add('hidden'); levelUpScreen.classList.add('hidden'); inventoryScreen.classList.add('hidden'); shopScreen.classList.add('hidden');
         startScreen.style.display = 'none'; gameOverScreen.style.display = 'none';
         if (sounds.ctx.state === 'suspended') sounds.ctx.resume();
+    }
+
+    toggleSpeed() {
+        if (this.timeScale === 1) this.timeScale = 2;
+        else if (this.timeScale === 2) this.timeScale = 3;
+        else this.timeScale = 1;
+        this.updateSpeedBtn();
+    }
+
+    updateSpeedBtn() {
+        speedBtn.innerText = `⚡ ${this.timeScale}x`;
+        speedBtn.style.color = this.timeScale > 1 ? '#f1c40f' : '#fff';
     }
 
     updateHUD() {
@@ -550,7 +762,10 @@ class GameEngine {
         if (this.kills > 50 && rand > 0.8) type = 'fast';
         if (this.kills > 100 && rand < 0.08) type = 'brute';
         
-        const hpMult = 1 + (this.level - 1) * 0.15;
+        let hpMult = 1 + (this.level - 1) * 0.12;
+        if (this.kills >= 10000) hpMult *= 30; // Nightmare mode (30x)
+        else if (this.kills >= 6000) hpMult *= 4; // Hardcore mode (4x)
+
         this.enemies.push(new Enemy(x, y, type, hpMult));
     }
 
@@ -577,6 +792,31 @@ class GameEngine {
         inventoryScreen.classList.remove('hidden');
         this.renderStats();
         this.renderInventory();
+        this.renderItems();
+    }
+
+    renderItems() {
+        itemsGrid.innerHTML = '';
+        this.player.items.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'weapon-card';
+            div.style.minWidth = '140px';
+            const isDivino = item.name.includes('Definitivo');
+            div.style.borderColor = isDivino ? '#00d2ff' : '#f1c40f';
+            div.style.boxShadow = isDivino ? '0 0 20px #00d2ff' : '0 0 10px #f1c40f';
+            
+            const isActive = (isDivino && this.player.statMultiplier === 1000) || (!isDivino && this.player.statMultiplier === 10);
+            const itemRarityColor = isDivino ? '#00d2ff' : '#f1c40f';
+            const itemRarityName = isDivino ? 'DEFINITIVO' : 'SUPER';
+
+            div.innerHTML = `<h4 style="font-size:10px; color:${div.style.borderColor}; margin-bottom:5px;">${item.name}</h4>
+                             <p style="font-size:8px; font-weight:bold; color:${itemRarityColor}; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px; display:inline-block; margin-bottom:5px;">${itemRarityName}</p>
+                             <p style="font-size:8px; margin:5px 0;">Quantidade: ${item.count}</p>
+                             <p style="font-size:9px; color:${isActive ? '#2ecc71' : '#555'}; font-weight:bold;">
+                                ${isActive ? '● ATIVO' : '○ RESERVA'}
+                             </p>`;
+            itemsGrid.appendChild(div);
+        });
     }
 
     renderStats() {
@@ -586,15 +826,26 @@ class GameEngine {
         const totalXpMult = s.xpMultiplier * (wpn ? wpn.rarity.xpBonus : 1);
         
         const stats = [
-            `Vida: ${Math.floor(s.hp)}/${s.maxHp}`,
-            `Dano: ${(s.damageMultiplier * 100).toFixed(0)}%`,
-            `Sorte: ${(s.luck * 100).toFixed(1)}%`,
+            `Vida: ${Math.floor(s.hp)}/${s.getStat(s.maxHp)}`,
+            `Dano: ${(s.getStat(s.damageMultiplier) * 100).toFixed(0)}%`,
+            `Sorte: ${(s.getStat(s.luck) * 100).toFixed(1)}%`,
             `XP Total: ${(totalXpMult * 100).toFixed(0)}%`,
-            `Veloc.: ${s.speed.toFixed(1)}`,
-            `Perfura.: ${s.pierce}`,
-            `Ímã: ${s.magnetRadius}px`,
+            `Veloc.: ${s.getStat(s.speed).toFixed(1)}`,
+            `Defesa: ${s.defense}%`,
+            `Crítico: ${s.critChance}%`,
             `Tiro: ${this.player.upgradesPicked.cadencia}/5`
         ];
+        if (metaUpgrades.activeTitle) {
+            const titleName = TITLES.find(t => t.id === metaUpgrades.activeTitle).name;
+            const titleSpan = document.createElement('div');
+            titleSpan.style.gridColumn = 'span 2';
+            titleSpan.style.color = '#e67e22';
+            titleSpan.style.textAlign = 'center';
+            titleSpan.style.marginTop = '5px';
+            titleSpan.style.borderTop = '1px solid #444';
+            titleSpan.innerText = `[${titleName}]`;
+            statsGrid.appendChild(titleSpan);
+        }
         stats.forEach(st => {
             const span = document.createElement('span');
             span.innerText = `• ${st}`;
@@ -621,9 +872,17 @@ class GameEngine {
             const idx = this.player.weapons.indexOf(wpn);
             let div = document.createElement('div');
             div.className = `weapon-card ${idx === this.player.equippedIndex ? 'equipped' : ''}`;
-            div.innerHTML = `<h3 class="${wpn.rarity.class}">${wpn.name}</h3>
+            
+            let warning = "";
+            if (wpn.type === 'Laser' && this.player.statMultiplier < 1000) {
+                warning = `<p style="color:#ff3333; font-size:10px; margin-top:5px; font-weight:bold;">⚠️ REQUER COMPOSTO DEFINITIVO</p>`;
+            }
+
+            div.innerHTML = `<h3 style="color:${wpn.rarity.color}; text-shadow: 0 0 5px ${wpn.rarity.color}; margin-bottom:5px;">${wpn.name}</h3>
+                             <p style="font-size:9px; font-weight:bold; color:${wpn.rarity.color}; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px; display:inline-block; margin-bottom:5px;">${wpn.rarity.name.toUpperCase()}</p>
                              <p>Dano: ${wpn.damage.toFixed(1)}</p>
-                             <p style="color:#2ecc71; font-size:12px;">XP Bônus: ${wpn.rarity.xpBonus}x</p>`;
+                             <p style="color:#2ecc71; font-size:10px;">XP Bônus: ${wpn.rarity.xpBonus}x</p>
+                             ${warning}`;
             div.onclick = () => {
                 this.player.equippedIndex = idx;
                 this.renderInventory();
@@ -771,6 +1030,47 @@ class GameEngine {
         this.updateMenuHUD();
     }
 
+    openTitle() {
+        this.state = 'TITLE';
+        document.getElementById('titleScreen').classList.remove('hidden');
+        document.getElementById('titleKills').innerText = `Abates Totais: ${totalKills}`;
+        this.renderTitles();
+    }
+    closeTitle() {
+        this.state = 'SHOP';
+        document.getElementById('titleScreen').classList.add('hidden');
+    }
+    renderTitles() {
+        const grid = document.getElementById('titleGrid');
+        grid.innerHTML = '';
+        TITLES.forEach(t => {
+            const div = document.createElement('div');
+            const unlocked = totalKills >= t.req;
+            const active = metaUpgrades.activeTitle === t.id;
+            div.className = 'upgrade-card';
+            div.style.padding = '10px';
+            div.style.border = '1px solid ' + (unlocked ? (active ? '#2ecc71' : '#e67e22') : '#444');
+            div.style.background = unlocked ? 'rgba(230, 126, 34, 0.1)' : 'rgba(0,0,0,0.5)';
+            div.style.opacity = unlocked ? '1' : '0.5';
+            div.style.cursor = unlocked ? 'pointer' : 'default';
+            
+            div.innerHTML = `<h4 style="color:${unlocked ? '#e67e22' : '#888'}; font-size:10px;">${t.name}</h4>
+                             <p style="font-size:8px; color:#ccc; margin:5px 0;">${t.desc}</p>
+                             <p style="font-size:7px; color:${unlocked ? '#2ecc71' : '#e74c3c'};">
+                                ${unlocked ? (active ? '● EQUIPADO' : 'Clique para Equipar') : 'Requer: ' + t.req + ' kills'}
+                             </p>`;
+            if (unlocked) {
+                div.onclick = () => {
+                    metaUpgrades.activeTitle = t.id;
+                    saveMeta();
+                    this.renderTitles();
+                    sounds.play('heal');
+                };
+            }
+            grid.appendChild(div);
+        });
+    }
+
     goToMenu() {
         this.state = 'MENU';
         gameOverScreen.style.display = 'none';
@@ -818,8 +1118,25 @@ class GameEngine {
 
     fireWeapon(tx, ty) {
         const wpn = this.player.getEquipped();
+        
+        // Restriction for Absolute Laser
+        if (wpn.type === 'Laser' && this.player.statMultiplier < 1000) {
+            // Cannot use without Composto Definitivo
+            return;
+        }
+
         const baseSpd = 16;
-        const finalDamage = wpn.damage * this.player.damageMultiplier;
+        let finalDamage = this.player.getStat(wpn.damage * this.player.damageMultiplier);
+        
+        // Title: Crit Chance
+        let isCrit = false;
+        if (Math.random() < this.player.critChance / 100) {
+            finalDamage *= 2.5; isCrit = true;
+        }
+
+        // Title: Boss Dmg
+        const targetIsBoss = this.enemies.some(e => e.type === 'boss' && Math.hypot(e.x - tx, e.y - ty) < 200);
+        if (targetIsBoss) finalDamage *= (1 + this.player.bossDmgBonus);
         
         if (wpn.type === 'Pistol') {
             this.projectiles.push(new Projectile(this.player.x, this.player.y, tx, ty, baseSpd, finalDamage, this.player.pierce, wpn.type));
@@ -847,6 +1164,13 @@ class GameEngine {
             this.projectiles.push(new Projectile(this.player.x, this.player.y, tx, ty, baseSpd*6, finalDamage, Infinity, wpn.type));
             screenShake = 5;
         }
+        else if (wpn.type === 'Laser') {
+            for(let i=0; i<3; i++) {
+                this.projectiles.push(new Projectile(this.player.x, this.player.y, tx + (Math.random()-0.5)*50, ty + (Math.random()-0.5)*50, baseSpd*10, finalDamage, Infinity, wpn.type));
+            }
+            screenShake = 10;
+            if(this.frames % 10 === 0) sounds.play('explosion');
+        }
 
         // Apply Ammo Box effect
         if (this.player.doubleShotTimer > 0 && wpn.type !== 'Shotgun') {
@@ -854,9 +1178,10 @@ class GameEngine {
             this.projectiles.push(new Projectile(this.player.x, this.player.y, this.player.x + Math.cos(angle), this.player.y + Math.sin(angle), baseSpd, finalDamage, this.player.pierce, wpn.type));
         }
 
-        this.player.shootCooldown = this.player.shootRate * wpn.fireRateMod;
+        this.player.shootCooldown = this.player.shootRate * wpn.fireRateMod * (1 - this.player.cooldownRed);
         this.player.muzzleTimer = 5;
         sounds.play('shoot');
+        if (isCrit) screenShake += 2;
     }
 
     update() {
@@ -869,20 +1194,48 @@ class GameEngine {
         if (this.frames % this.spawnRate === 0) this.spawnEnemy();
 
         this.player.update();
+        // Adjust speed for stat mult with speed-specific flag
+        this.player.speed = this.player.getStat(4 + (metaUpgrades.speed * 0.2), true);
         
         if (this.kills > 0 && Math.floor(this.kills / 3000) > this.bossesSpawned) {
             this.bossesSpawned++;
             const angle = Math.random() * Math.PI * 2; const dist = Math.max(canvas.width, canvas.height) / 2 + 100;
             const x = this.player.x + Math.cos(angle) * dist; const y = this.player.y + Math.sin(angle) * dist;
-            const hpMult = 1 + (this.level - 1) * 0.15;
-            this.enemies.push(new Enemy(x, y, 'boss', hpMult));
+            
+            // New Scaling: 20k, 40k, 80k...
+            let hpMult = Math.pow(2, this.bossesSpawned - 1);
+            let boss = new Enemy(x, y, 'boss', hpMult);
+            boss.maxHp = 20000 * hpMult; boss.hp = boss.maxHp;
+            this.enemies.push(boss);
             screenShake = 30;
+        }
+
+        // Mega Boss at 20k kills
+        if (this.kills >= 20000 && !this.megaBossSpawned) {
+            this.megaBossSpawned = true;
+            const x = this.player.x + 500; const y = this.player.y;
+            let mega = new Enemy(x, y, 'boss', 100);
+            mega.name = "MEGA BOSS: O SOBERANO";
+            mega.maxHp = 50000000; // 50 Million HP
+            mega.hp = mega.maxHp;
+            mega.isMega = true;
+            this.enemies.push(mega);
+            screenShake = 50;
+        }
+
+        // Boss HUD Update
+        const activeBoss = this.enemies.find(e => e.type === 'boss');
+        if (activeBoss) {
+            bossHud.style.display = 'flex';
+            bossHpBar.style.width = `${(activeBoss.hp / activeBoss.maxHp) * 100}%`;
+        } else {
+            bossHud.style.display = 'none';
         }
 
         // Heal every 200 kills
         if (this.kills > 0 && Math.floor(this.kills / 200) > this.healsPerformed) {
             this.healsPerformed++;
-            this.player.hp = this.player.maxHp;
+            this.player.hp = this.player.getStat(this.player.maxHp);
             this.updateHUD();
             this.particleSystem.spawn(this.player.x, this.player.y, '#2ecc71', 30, 2); // Green particles for heal
             sounds.play('heal');
@@ -946,10 +1299,29 @@ class GameEngine {
                         if (e.type === 'brute') xpVal = 15;
                         if (e.type === 'boss') xpVal = 500;
                         
+                        if (this.kills >= 10000) xpVal *= 10; // Nightmare XP (10x)
+                        else if (this.kills >= 6000) xpVal *= 3; // Hardcore XP
+
                         this.drops.push(new Drop(e.x, e.y, 'xp', xpVal));
-                        if (Math.random() < this.player.luck) {
+                        
+                        // Boss item drop
+                        if (e.type === 'boss' && Math.random() < 0.1) {
+                            this.drops.push(new Drop(e.x - 10, e.y, 'special_item', 0));
+                        }
+                        
+                        // Absolute Laser drop from Mega Boss
+                        if (e.isMega && Math.random() < 0.05) {
+                            this.drops.push(new Drop(e.x + 10, e.y, 'absolute_weapon', 0));
+                        }
+
+                        const luckChance = this.player.getStat(this.player.luck);
+                        if (Math.random() < luckChance) {
                             const r = Math.random();
-                            if (r < 0.3) this.drops.push(new Drop(e.x + 10, e.y, 'supply'));
+                            let bonusMult = 1;
+                            if (this.kills >= 10000) bonusMult = 10;
+                            else if (this.kills >= 6000) bonusMult = 2;
+                            
+                            if (r < 0.3) this.drops.push(new Drop(e.x + 10, e.y, 'supply', 1 * bonusMult));
                             else if (r < 0.6) this.drops.push(new Drop(e.x + 10, e.y, 'health'));
                             else if (r < 0.9) this.drops.push(new Drop(e.x + 10, e.y, 'ammo'));
                             else this.drops.push(new Drop(e.x + 10, e.y, 'weapon')); // 10% chance out of luck chance
@@ -958,7 +1330,14 @@ class GameEngine {
                         this.enemies.splice(j, 1);
                         this.kills += 1;
                         totalKills += 1;
-                        if (this.kills % 5 === 0) saveMeta(); // Save every 5 kills to optimize IO
+                        if (this.kills % 5 === 0) saveMeta(); 
+
+                        // Title: Lifesteal (Optimized)
+                        if (this.player.lifesteal > 0 && this.frames % 2 === 0) {
+                            const heal = Math.min(2, p.damage * 0.0005 * this.player.lifesteal);
+                            this.player.hp = Math.min(this.player.getStat(this.player.maxHp), this.player.hp + heal);
+                        }
+
                         this.particleSystem.addBlood(e.x, e.y); this.particleSystem.spawn(e.x, e.y, '#aa0000', 15, 1.5);
                         if (e.type === 'brute') { screenShake = 8; sounds.play('explosion'); }
                         else { sounds.play('hit'); }
@@ -974,7 +1353,9 @@ class GameEngine {
             let d = this.drops[i];
             
             // Magnet logic (Smoother pull)
-            if (Math.hypot(this.player.x - d.x, this.player.y - d.y) < this.player.magnetRadius) {
+            let magRad = this.player.magnetRadius;
+            if (this.kills >= 6000) magRad *= 2;
+            if (Math.hypot(this.player.x - d.x, this.player.y - d.y) < magRad) {
                 let angle = Math.atan2(this.player.y - d.y, this.player.x - d.x);
                 let pull = 10;
                 d.x += Math.cos(angle) * pull;
@@ -992,9 +1373,23 @@ class GameEngine {
                 else if (d.type === 'health') { this.player.hp = Math.min(this.player.maxHp, this.player.hp + 20); } 
                 else if (d.type === 'ammo') { this.player.doubleShotTimer = 600; }
                 else if (d.type === 'weapon') {
-                    this.player.weapons.push(generateRandomWeapon(this.player.luck));
+                    this.player.weapons.push(generateRandomWeapon(this.player.getStat(this.player.luck)));
                     // Auto-equip if it's the second weapon
                     if (this.player.weapons.length === 2) this.player.equippedIndex = 1;
+                } else if (d.type === 'special_item') {
+                    this.player.addSpecialItem('Composto Super');
+                    this.particleSystem.spawn(d.x, d.y, '#00d2ff', 40, 2);
+                } else if (d.type === 'absolute_weapon') {
+                    const laser = {
+                        id: 'absolute_laser',
+                        name: 'Laser Patriota',
+                        type: 'Laser',
+                        rarity: RARITIES.find(r => r.name === 'ABSOLUTE'),
+                        damage: 5000 * 50, // 50x Mjolnir base
+                        fireRateMod: 0.02
+                    };
+                    this.player.weapons.push(laser);
+                    this.particleSystem.spawn(d.x, d.y, '#ff0000', 100, 3);
                 }
                 this.drops.splice(i, 1); this.updateHUD();
             }
@@ -1011,7 +1406,18 @@ class GameEngine {
             let e = this.enemies[i];
             e.update(this.player.x, this.player.y, this.enemySpeedMultiplier, this.barricades);
             if (Math.hypot(e.x - this.player.x, e.y - this.player.y) < e.radius * 0.8 + this.player.radius * 0.8) {
-                this.player.hp -= 0.5; this.updateHUD(); screenShake = 1;
+                // Title: Evasion
+                if (Math.random() < this.player.evasion / 100) {
+                    this.particleSystem.spawn(this.player.x, this.player.y, '#fff', 10, 1);
+                    continue; 
+                }
+
+                // Title: Shield
+                if (this.player.shieldActive) continue;
+
+                // Title: Defense
+                let dmg = 0.5 * (1 - this.player.defense / 100);
+                this.player.hp -= dmg; this.updateHUD(); screenShake = 1;
                 if (this.player.hp <= 0) this.gameOver();
             }
         }
@@ -1075,12 +1481,22 @@ fuseAllBtn.addEventListener('click', (e) => { e.target.blur(); game.fuseAllWeapo
 if(equipBestBtn) equipBestBtn.addEventListener('click', (e) => { e.target.blur(); game.equipBestWeapon(); });
 openShopBtn.addEventListener('click', (e) => { e.target.blur(); game.openShop(); });
 closeShopBtn.addEventListener('click', (e) => { e.target.blur(); game.closeShop(); });
+document.getElementById('openTitleBtn').addEventListener('click', (e) => { e.target.blur(); game.openTitle(); });
+document.getElementById('closeTitleBtn').addEventListener('click', (e) => { e.target.blur(); game.closeTitle(); });
+muteBtn.addEventListener('click', (e) => {
+    e.target.blur();
+    let enabled = sounds.toggle();
+    muteBtn.innerText = enabled ? "🔇 MUTE" : "🔊 UNMUTE";
+});
+speedBtn.addEventListener('click', (e) => { e.target.blur(); game.toggleSpeed(); });
 
 game.updateMenuHUD();
 
 function gameLoop() { 
     try {
-        game.update(); 
+        for(let i=0; i<game.timeScale; i++) {
+            game.update(); 
+        }
         game.draw(); 
         requestAnimationFrame(gameLoop); 
     } catch (e) {
