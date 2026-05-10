@@ -83,8 +83,10 @@ let metaUpgrades = {
 };
 
 const saveMeta = () => {
-    localStorage.setItem('ms_total_kills', totalKills);
-    localStorage.setItem('ms_meta_upgrades', JSON.stringify(metaUpgrades));
+    try {
+        localStorage.setItem('ms_total_kills', totalKills);
+        localStorage.setItem('ms_meta_upgrades', JSON.stringify(metaUpgrades));
+    } catch (e) { console.error("Erro ao salvar progresso:", e); }
 };
 
 const SHOP_ITEMS = [
@@ -580,11 +582,14 @@ class GameEngine {
     renderStats() {
         statsGrid.innerHTML = '';
         const s = this.player;
+        const wpn = s.getEquipped();
+        const totalXpMult = s.xpMultiplier * (wpn ? wpn.rarity.xpBonus : 1);
+        
         const stats = [
             `Vida: ${Math.floor(s.hp)}/${s.maxHp}`,
             `Dano: ${(s.damageMultiplier * 100).toFixed(0)}%`,
             `Sorte: ${(s.luck * 100).toFixed(1)}%`,
-            `XP: ${(s.xpMultiplier * 100).toFixed(0)}%`,
+            `XP Total: ${(totalXpMult * 100).toFixed(0)}%`,
             `Veloc.: ${s.speed.toFixed(1)}`,
             `Perfura.: ${s.pierce}`,
             `Ímã: ${s.magnetRadius}px`,
@@ -950,10 +955,10 @@ class GameEngine {
                             else this.drops.push(new Drop(e.x + 10, e.y, 'weapon')); // 10% chance out of luck chance
                         }
 
-                        this.enemies.splice(this.enemies.indexOf(e), 1);
+                        this.enemies.splice(j, 1);
                         this.kills += 1;
                         totalKills += 1;
-                        saveMeta();
+                        if (this.kills % 5 === 0) saveMeta(); // Save every 5 kills to optimize IO
                         this.particleSystem.addBlood(e.x, e.y); this.particleSystem.spawn(e.x, e.y, '#aa0000', 15, 1.5);
                         if (e.type === 'brute') { screenShake = 8; sounds.play('explosion'); }
                         else { sounds.play('hit'); }
@@ -968,11 +973,12 @@ class GameEngine {
         for (let i = this.drops.length - 1; i >= 0; i--) {
             let d = this.drops[i];
             
-            // Magnet logic
+            // Magnet logic (Smoother pull)
             if (Math.hypot(this.player.x - d.x, this.player.y - d.y) < this.player.magnetRadius) {
                 let angle = Math.atan2(this.player.y - d.y, this.player.x - d.x);
-                d.x += Math.cos(angle) * 8;
-                d.y += Math.sin(angle) * 8;
+                let pull = 10;
+                d.x += Math.cos(angle) * pull;
+                d.y += Math.sin(angle) * pull;
             }
 
             if (Math.hypot(this.player.x - d.x, this.player.y - d.y) < this.player.radius + d.radius + 10) {

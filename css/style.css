@@ -230,3 +230,20 @@ button:active {
     transform: translate(2px, 2px);
     box-shadow: 2px 2px 0px #000;
 }
+
+select {
+    font-family: 'Press Start 2P', cursive;
+    background: #111;
+    color: #fff;
+    border: 2px solid #555;
+    padding: 8px;
+    font-size: 10px;
+    cursor: pointer;
+    outline: none;
+    border-radius: 4px;
+}
+
+select:hover {
+    border-color: #00ffff;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+}
