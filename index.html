@@ -51,12 +51,24 @@
 
         <!-- Inventory Screen -->
         <div id="inventoryScreen" class="overlay hidden">
-            <h1 style="color: #fff; text-shadow: 4px 4px 0 #000;">INVENTÁRIO</h1>
-            <p>Armas Coletadas (Clique para equipar):</p>
-            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                <button id="fuseAllBtn" style="font-size: 14px; padding: 10px 20px; border-color: #9b59b6; color: #9b59b6;">Fundir Tudo (3x Iguais)</button>
-                <button id="equipBestBtn" style="font-size: 14px; padding: 10px 20px; border-color: #f1c40f; color: #f1c40f;">Equipar Melhor</button>
+            <h1 style="color: #fff; text-shadow: 4px 4px 0 #000; margin-bottom: 5px;">INVENTÁRIO & STATUS</h1>
+            
+            <div id="statsPanel" style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 8px; margin-bottom: 15px; width: 90%; max-width: 600px; font-size: 12px; color: #2ecc71; border: 1px solid #2ecc71;">
+                <p style="font-weight: bold; color: #fff; margin-bottom: 5px;">ESTATÍSTICAS DO PERSONAGEM</p>
+                <div id="statsGrid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;"></div>
             </div>
+
+            <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
+                <span style="font-size: 12px;">Ordenar por:</span>
+                <select id="sortSelect" style="background: #111; color: #fff; border: 2px solid #555; padding: 5px; font-family: 'Press Start 2P'; font-size: 10px;">
+                    <option value="rarity">Raridade</option>
+                    <option value="name">Nome</option>
+                    <option value="damage">Dano</option>
+                </select>
+                <button id="fuseAllBtn" style="font-size: 10px; padding: 10px; border-color: #9b59b6; color: #9b59b6; margin: 0;">Fundir Tudo</button>
+                <button id="equipBestBtn" style="font-size: 10px; padding: 10px; border-color: #f1c40f; color: #f1c40f; margin: 0;">Melhor</button>
+            </div>
+            <p style="font-size: 10px;">Armas (Clique para equipar):</p>
             <div id="weaponsGrid"></div>
             <button id="closeInventoryBtn">Voltar ao Jogo</button>
         </div>

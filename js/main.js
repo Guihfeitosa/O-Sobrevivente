@@ -26,6 +26,8 @@ const openShopBtn = document.getElementById('openShopBtn');
 const closeShopBtn = document.getElementById('closeShopBtn');
 const totalKillsDisplay = document.getElementById('totalKillsDisplay');
 const shopKills = document.getElementById('shopKills');
+const statsGrid = document.getElementById('statsGrid');
+const sortSelect = document.getElementById('sortSelect');
 
 // --- Audio System (Synthesized) ---
 class SoundManager {
@@ -71,8 +73,13 @@ const sounds = new SoundManager();
 
 // --- Persistence & Shop Data ---
 let totalKills = parseInt(localStorage.getItem('ms_total_kills')) || 0;
-let metaUpgrades = JSON.parse(localStorage.getItem('ms_meta_upgrades')) || {
-    hp: 0, speed: 0, luck: 0, damage: 0
+let savedMeta = JSON.parse(localStorage.getItem('ms_meta_upgrades')) || {};
+let metaUpgrades = {
+    hp: savedMeta.hp || 0,
+    speed: savedMeta.speed || 0,
+    luck: savedMeta.luck || 0,
+    damage: savedMeta.damage || 0,
+    xp: savedMeta.xp || 0
 };
 
 const saveMeta = () => {
@@ -81,10 +88,11 @@ const saveMeta = () => {
 };
 
 const SHOP_ITEMS = [
-    { id: 'hp', name: 'Resistência', desc: '+20 HP Base', cost: 500, perLevel: 20 },
-    { id: 'speed', name: 'Agilidade', desc: '+5% Velocidade', cost: 1000, perLevel: 0.2 },
-    { id: 'luck', name: 'Sorte Grande', desc: '+2% Sorte Base', cost: 1500, perLevel: 0.02 },
-    { id: 'damage', name: 'Músculos', desc: '+10% Dano Base', cost: 2000, perLevel: 0.1 }
+    { id: 'hp', name: 'Resistência', desc: '+20 HP Base', cost: 500 },
+    { id: 'speed', name: 'Agilidade', desc: '+5% Velocidade', cost: 1000 },
+    { id: 'luck', name: 'Sorte Grande', desc: '+2% Sorte Base', cost: 1500 },
+    { id: 'damage', name: 'Músculos', desc: '+10% Dano Base', cost: 2000 },
+    { id: 'xp', name: 'Aprendizagem', desc: '+10% XP Global', cost: 2500 }
 ];
 
 function resizeCanvas() {
@@ -353,14 +361,18 @@ class Player {
         this.speed = 4 + (metaUpgrades.speed * 0.2);
         this.luck = 0.05 + (metaUpgrades.luck * 0.02);
         this.damageMultiplier = 1.0 + (metaUpgrades.damage * 0.1);
+        this.xpMultiplier = 1.0 + (metaUpgrades.xp * 0.1);
         
         this.facingLeft = false; this.animTime = 0;
+        
+        // Upgrades tracking
+        this.upgradesPicked = { cadencia: 0, penetracao: 0, velocidade: 0, sorte: 0, ima: 0, xpgain: 0, damage: 0 };
         
         // Stats
         this.baseShootRate = 25; this.shootRate = 25; this.shootCooldown = 0;
         this.pierce = 0; 
         this.magnetRadius = 30; 
-        this.xpMultiplier = 1;
+        // this.xpMultiplier initialized above with meta
 
         // Weapons Inventory
         const defaultWeapon = { id: 'w1', name: 'Pistol Comum', type: 'Pistol', rarity: RARITIES[0], damage: BASE_DAMAGE['Pistol'], fireRateMod: 1 };
@@ -561,9 +573,43 @@ class GameEngine {
     openInventory() {
         this.state = 'INVENTORY';
         inventoryScreen.classList.remove('hidden');
+        this.renderStats();
+        this.renderInventory();
+    }
+
+    renderStats() {
+        statsGrid.innerHTML = '';
+        const s = this.player;
+        const stats = [
+            `Vida: ${Math.floor(s.hp)}/${s.maxHp}`,
+            `Dano: ${(s.damageMultiplier * 100).toFixed(0)}%`,
+            `Sorte: ${(s.luck * 100).toFixed(1)}%`,
+            `XP: ${(s.xpMultiplier * 100).toFixed(0)}%`,
+            `Veloc.: ${s.speed.toFixed(1)}`,
+            `Perfura.: ${s.pierce}`,
+            `Ímã: ${s.magnetRadius}px`,
+            `Tiro: ${this.player.upgradesPicked.cadencia}/5`
+        ];
+        stats.forEach(st => {
+            const span = document.createElement('span');
+            span.innerText = `• ${st}`;
+            statsGrid.appendChild(span);
+        });
+    }
+
+    renderInventory() {
         weaponsGrid.innerHTML = '';
+        const sortBy = sortSelect.value;
         
-        this.player.weapons.forEach((wpn, idx) => {
+        const sortedWeapons = [...this.player.weapons].sort((a, b) => {
+            if (sortBy === 'name') return a.name.localeCompare(b.name);
+            if (sortBy === 'damage') return b.damage - a.damage;
+            if (sortBy === 'rarity') return b.rarity.level - a.rarity.level;
+            return 0;
+        });
+        
+        sortedWeapons.forEach((wpn) => {
+            const idx = this.player.weapons.indexOf(wpn);
             let div = document.createElement('div');
             div.className = `weapon-card ${idx === this.player.equippedIndex ? 'equipped' : ''}`;
             div.innerHTML = `<h3 class="${wpn.rarity.class}">${wpn.name}</h3>
@@ -571,7 +617,8 @@ class GameEngine {
                              <p style="color:#2ecc71; font-size:12px;">XP Bônus: ${wpn.rarity.xpBonus}x</p>`;
             div.onclick = () => {
                 this.player.equippedIndex = idx;
-                this.openInventory();
+                this.renderInventory();
+                this.renderStats();
             };
             weaponsGrid.appendChild(div);
         });
@@ -661,16 +708,26 @@ class GameEngine {
 
     triggerLevelUp() {
         this.state = 'LEVELUP'; levelUpScreen.classList.remove('hidden'); upgradesContainer.innerHTML = '';
-        let shuffled = UPGRADES.sort(() => 0.5 - Math.random()).slice(0, 3);
+        
+        // Filter out cadencia if it reached max level 5
+        let availableUpgrades = UPGRADES.filter(upg => {
+            if (upg.id === 'cadencia' && this.player.upgradesPicked.cadencia >= 5) return false;
+            return true;
+        });
+
+        let shuffled = availableUpgrades.sort(() => 0.5 - Math.random()).slice(0, 3);
         shuffled.forEach(upg => {
             let div = document.createElement('div'); div.className = 'upgrade-card';
-            div.innerHTML = `<h3>${upg.name}</h3><p>${upg.desc}</p>`;
+            let currentLv = this.player.upgradesPicked[upg.id] || 0;
+            div.innerHTML = `<h3>${upg.name}</h3><p>${upg.desc}</p><p style="color:#f1c40f; margin-top:5px;">Nv. ${currentLv}</p>`;
             div.onclick = () => this.applyUpgrade(upg.id);
             upgradesContainer.appendChild(div);
         });
     }
 
     applyUpgrade(id) {
+        this.player.upgradesPicked[id] = (this.player.upgradesPicked[id] || 0) + 1;
+        
         if (id === 'cadencia') this.player.shootRate = Math.max(5, this.player.shootRate - 4);
         else if (id === 'penetracao') this.player.pierce += 1;
         else if (id === 'velocidade') this.player.speed += 0.5;
@@ -996,6 +1053,7 @@ startBtn.addEventListener('click', (e) => { e.target.blur(); game.reset(); });
 restartBtn.addEventListener('click', (e) => { e.target.blur(); game.reset(); });
 menuBtn.addEventListener('click', (e) => { e.target.blur(); game.goToMenu(); });
 closeInventoryBtn.addEventListener('click', (e) => { e.target.blur(); game.closeInventory(); });
+sortSelect.addEventListener('change', () => game.renderInventory());
 fuseAllBtn.addEventListener('click', (e) => { e.target.blur(); game.fuseAllWeapons(); });
 if(equipBestBtn) equipBestBtn.addEventListener('click', (e) => { e.target.blur(); game.equipBestWeapon(); });
 openShopBtn.addEventListener('click', (e) => { e.target.blur(); game.openShop(); });
