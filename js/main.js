@@ -181,7 +181,7 @@ const UPGRADES = [
 ];
 
 const WEAPON_TYPES = ['Pistol', 'Shotgun', 'Minigun', 'RPG'];
-const BASE_DAMAGE = { 'Pistol': 10, 'Shotgun': 18, 'Minigun': 25, 'RPG': 60, 'Plasma': 150, 'Acelerador': 1000, 'Mjolnir': 5000 };
+const BASE_DAMAGE = { 'Pistol': 10, 'Shotgun': 18, 'Minigun': 25, 'RPG': 60, 'Plasma': 150, 'Acelerador': 1000, 'Mjolnir': 5000, 'Laser': 25000 };
 
 const RARITIES = [
     { name: 'Comum', mult: 1, class: 'rarity-comum', color: '#ecf0f1', level: 0, xpBonus: 1.0 },
@@ -1000,6 +1000,35 @@ class GameEngine {
                     let type = key.split('_')[0];
                     let rLevel = parseInt(key.split('_')[1]);
                     
+                    // Recipe: 3 Mjolnir ABSOLUTE = Laser Patriota
+                    if (type === 'Mjolnir' && rLevel === 8) {
+                        let toRemove = counts[key].slice(0, 3);
+                        let equippedRemoved = toRemove.includes(this.player.equippedIndex);
+                        
+                        toRemove.sort((a,b)=>b-a);
+                        for(let idx of toRemove) {
+                            this.player.weapons.splice(idx, 1);
+                            if (this.player.equippedIndex > idx) this.player.equippedIndex--;
+                        }
+
+                        const absRarity = RARITIES[8];
+                        const laserWeapon = {
+                            id: Math.random().toString(36).substr(2, 9),
+                            name: `Laser Patriota ${absRarity.name}`,
+                            type: 'Laser',
+                            rarity: absRarity,
+                            damage: BASE_DAMAGE['Laser'] * absRarity.mult,
+                            fireRateMod: 0.02
+                        };
+                        
+                        this.player.weapons.push(laserWeapon);
+                        if (equippedRemoved || this.player.equippedIndex >= this.player.weapons.length) {
+                            this.player.equippedIndex = this.player.weapons.length - 1;
+                        }
+                        changed = true;
+                        break;
+                    }
+
                     if (rLevel < RARITIES.length - 1) { 
                         let toRemove = counts[key].slice(0, 3);
                         let equippedRemoved = toRemove.includes(this.player.equippedIndex);
@@ -1013,15 +1042,16 @@ class GameEngine {
                         let newType = type;
                         if (type === 'Plasma' && rLevel === 5) newType = 'Acelerador';
                         if (type === 'Acelerador' && rLevel === 6) newType = 'Mjolnir';
+                        if (type === 'Mjolnir' && rLevel === 8) newType = 'Laser';
 
                         const newRarity = RARITIES[rLevel + 1];
                         const fusedWeapon = {
                             id: Math.random().toString(36).substr(2, 9),
-                            name: `${newType} ${newRarity.name}`,
+                            name: `${newType === 'Laser' ? 'Laser Patriota' : newType} ${newRarity.name}`,
                             type: newType,
                             rarity: newRarity,
                             damage: BASE_DAMAGE[newType] * newRarity.mult,
-                            fireRateMod: newType === 'Minigun' ? 0.3 : (newType === 'RPG' ? 2.5 : (newType === 'Shotgun' ? 1.5 : (newType === 'Plasma' ? 0.1 : (newType === 'Acelerador' ? 0.05 : (newType === 'Mjolnir' ? 0.05 : 1)))))
+                            fireRateMod: newType === 'Minigun' ? 0.3 : (newType === 'RPG' ? 2.5 : (newType === 'Shotgun' ? 1.5 : (newType === 'Plasma' ? 0.1 : (newType === 'Acelerador' ? 0.05 : (newType === 'Mjolnir' ? 0.05 : (newType === 'Laser' ? 0.02 : 1))))))
                         };
                         
                         this.player.weapons.push(fusedWeapon);
