@@ -546,8 +546,13 @@ class Player {
 
         if (dx !== 0 || dy !== 0) {
             const mag = Math.sqrt(dx * dx + dy * dy);
-            this.x += (dx / mag) * this.speed;
-            this.y += (dy / mag) * this.speed;
+            // Speed dampener for high timeScales to keep control
+            let speedScale = 1.0;
+            if (game.timeScale === 5) speedScale = 0.7;
+            if (game.timeScale === 10) speedScale = 0.5;
+            
+            this.x += (dx / mag) * this.speed * speedScale;
+            this.y += (dy / mag) * this.speed * speedScale;
             this.animTime += 0.25;
             this.facingLeft = dx < 0;
         }
@@ -757,6 +762,7 @@ class GameEngine {
         this.particleSystem = new ParticleSystem(); this.state = 'MENU'; 
         this.bossesSpawned = 0; this.healsPerformed = 0; 
         this.timeScale = 1; this.megaBossSpawned = false;
+        this.difficultyFactor = 1.0;
     }
 
     reset() {
@@ -765,6 +771,7 @@ class GameEngine {
         this.kills = 0; this.frames = 0; this.enemySpeedMultiplier = 1; this.spawnRate = 90;
         this.level = 1; this.xp = 0; this.maxXp = 10; this.supplies = 0; this.bossesSpawned = 0; this.healsPerformed = 0;
         this.state = 'PLAY'; screenShake = 0; this.timeScale = 1; this.megaBossSpawned = false;
+        this.difficultyFactor = 1.0;
         this.updateHUD();
         this.updateSpeedBtn();
         startScreen.classList.add('hidden'); gameOverScreen.classList.add('hidden'); levelUpScreen.classList.add('hidden'); inventoryScreen.classList.add('hidden'); shopScreen.classList.add('hidden');
@@ -775,6 +782,8 @@ class GameEngine {
     toggleSpeed() {
         if (this.timeScale === 1) this.timeScale = 2;
         else if (this.timeScale === 2) this.timeScale = 3;
+        else if (this.timeScale === 3) this.timeScale = 5;
+        else if (this.timeScale === 5) this.timeScale = 10;
         else this.timeScale = 1;
         this.updateSpeedBtn();
     }
@@ -788,6 +797,8 @@ class GameEngine {
         scoreDisplay.innerText = `Kills: ${this.kills}`;
         levelDisplay.innerText = `Lvl: ${this.level}`;
         suppliesDisplay.innerText = `Madeira: ${this.supplies}`;
+        const diffDisplay = document.getElementById('difficultyDisplay');
+        if (diffDisplay) diffDisplay.innerText = `Risco: ${this.difficultyFactor.toFixed(1)}x`;
         hpBar.style.width = `${Math.max(0, (this.player.hp / this.player.maxHp) * 100)}%`;
         xpBar.style.width = `${Math.min(100, (this.xp / this.maxXp) * 100)}%`;
     }
@@ -800,7 +811,7 @@ class GameEngine {
         if (this.kills > 50 && rand > 0.8) type = 'fast';
         if (this.kills > 100 && rand < 0.08) type = 'brute';
         
-        let hpMult = 1 + (this.level - 1) * 0.12;
+        let hpMult = (1 + (this.level - 1) * 0.12) * this.difficultyFactor;
         if (this.kills >= 10000) hpMult *= 30; // Nightmare mode (30x)
         else if (this.kills >= 6000) hpMult *= 4; // Hardcore mode (4x)
 
@@ -1044,7 +1055,21 @@ class GameEngine {
         shuffled.forEach(upg => {
             let div = document.createElement('div'); div.className = 'upgrade-card';
             let currentLv = this.player.upgradesPicked[upg.id] || 0;
-            div.innerHTML = `<h3>${upg.name}</h3><p>${upg.desc}</p><p style="color:#f1c40f; margin-top:5px;">Nv. ${currentLv}</p>`;
+            
+            // Calculate evolved bonus display
+            let bonusText = "";
+            const scale = Math.max(1, Math.sqrt(this.difficultyFactor));
+            if (upg.id === 'damage') bonusText = `+${(20 * scale).toFixed(0)}% Dano`;
+            else if (upg.id === 'xpgain') bonusText = `+${(20 * scale).toFixed(0)}% XP`;
+            else if (upg.id === 'velocidade') bonusText = `+${(0.5 * scale).toFixed(1)} Veloc.`;
+            else if (upg.id === 'sorte') bonusText = `+${(5 * scale).toFixed(0)}% Sorte`;
+            else if (upg.id === 'ima') bonusText = `+${(40 * scale).toFixed(0)} Alcance`;
+            else if (upg.id === 'penetracao') bonusText = `+${Math.max(1, Math.floor(1 * scale))} Pierce`;
+            else if (upg.id === 'cadencia') bonusText = `Tiro mais rápido`;
+
+            div.innerHTML = `<h3>${upg.name}</h3><p>${upg.desc}</p>
+                             <p style="color:#2ecc71; font-weight:bold; margin-top:5px;">${bonusText}</p>
+                             <p style="color:#f1c40f; font-size:10px;">Nv. ${currentLv}</p>`;
             div.onclick = () => this.applyUpgrade(upg.id);
             upgradesContainer.appendChild(div);
         });
@@ -1053,18 +1078,24 @@ class GameEngine {
     applyUpgrade(id) {
         this.player.upgradesPicked[id] = (this.player.upgradesPicked[id] || 0) + 1;
         
+        // Bonus scales with Difficulty (Evolving System)
+        const scale = Math.max(1, Math.sqrt(this.difficultyFactor));
+        
         if (id === 'cadencia') this.player.shootRate = Math.max(5, this.player.shootRate - 4);
-        else if (id === 'penetracao') this.player.pierce += 1;
-        else if (id === 'velocidade') this.player.speed += 0.5;
-        else if (id === 'sorte') this.player.luck += 0.05;
-        else if (id === 'ima') this.player.magnetRadius += 40;
-        else if (id === 'xpgain') this.player.xpMultiplier += 0.2;
-        else if (id === 'damage') this.player.damageMultiplier += 0.2;
+        else if (id === 'penetracao') this.player.pierce += Math.max(1, Math.floor(1 * scale));
+        else if (id === 'velocidade') this.player.speed += 0.5 * scale;
+        else if (id === 'sorte') this.player.luck += 0.05 * scale;
+        else if (id === 'ima') this.player.magnetRadius += 40 * scale;
+        else if (id === 'xpgain') this.player.xpMultiplier += 0.2 * scale;
+        else if (id === 'damage') this.player.damageMultiplier += 0.2 * scale;
         
         this.level++; 
         this.xp -= this.maxXp; 
         if (this.xp < 0) this.xp = 0;
-        this.maxXp = this.maxXp + 20 + (this.level * 5); // Linear scaling
+        
+        // Cost scales with level AND current risk to prevent spam
+        const riskMod = Math.sqrt(game.difficultyFactor);
+        this.maxXp = Math.floor((this.maxXp + 25 + (this.level * 10)) * riskMod);
         
         this.updateHUD(); levelUpScreen.classList.add('hidden'); this.state = 'PLAY';
         sounds.play('levelup');
@@ -1188,48 +1219,54 @@ class GameEngine {
         const targetIsBoss = this.enemies.some(e => e.type === 'boss' && Math.hypot(e.x - tx, e.y - ty) < 200);
         if (targetIsBoss) finalDamage *= (1 + this.player.bossDmgBonus);
         
+        this.player.shootCooldown = this.player.shootRate * wpn.fireRateMod * (1 - this.player.cooldownRed);
+        this.player.muzzleTimer = 5;
+
+        // Calculate Barrel Exit Point
+        let barrelX = this.player.x;
+        let barrelY = this.player.y;
+        const side = this.player.facingLeft ? -1 : 1;
+        
+        // Weapon-specific offsets
+        if (wpn.type === 'Pistol') barrelX += 25 * side;
+        else if (wpn.type === 'Shotgun') barrelX += 30 * side;
+        else if (wpn.type === 'Minigun') barrelX += 35 * side;
+        else if (wpn.type === 'RPG') barrelX += 40 * side;
+        else if (wpn.type === 'Plasma') barrelX += 30 * side;
+        else if (wpn.type === 'Acelerador') barrelX += 32 * side;
+        else if (wpn.type === 'Mjolnir') barrelX += 35 * side;
+        else if (wpn.type === 'Laser') barrelX += 45 * side;
+
+        const spawnProj = (targetX, targetY) => {
+            this.projectiles.push(new Projectile(barrelX, barrelY, targetX, targetY, baseSpd, finalDamage, this.player.pierce, wpn.type));
+        };
+
         if (wpn.type === 'Pistol') {
-            this.projectiles.push(new Projectile(this.player.x, this.player.y, tx, ty, baseSpd, finalDamage, this.player.pierce, wpn.type));
+            spawnProj(tx, ty);
         } 
         else if (wpn.type === 'Shotgun') {
             for(let i=-2; i<=2; i++) {
-                const angle = Math.atan2(ty - this.player.y, tx - this.player.x) + (i * 0.15);
-                this.projectiles.push(new Projectile(this.player.x, this.player.y, this.player.x + Math.cos(angle), this.player.y + Math.sin(angle), baseSpd*0.9, finalDamage, this.player.pierce, wpn.type));
+                const angle = Math.atan2(ty - barrelY, tx - barrelX) + (i * 0.15);
+                spawnProj(barrelX + Math.cos(angle)*100, barrelY + Math.sin(angle)*100);
             }
         }
         else if (wpn.type === 'Minigun') {
-            const angle = Math.atan2(ty - this.player.y, tx - this.player.x) + (Math.random() - 0.5)*0.2;
-            this.projectiles.push(new Projectile(this.player.x, this.player.y, this.player.x + Math.cos(angle), this.player.y + Math.sin(angle), baseSpd*1.2, finalDamage, this.player.pierce, wpn.type));
+            const angle = Math.atan2(ty - barrelY, tx - barrelX) + (Math.random() - 0.5)*0.2;
+            spawnProj(barrelX + Math.cos(angle)*100, barrelY + Math.sin(angle)*100);
         }
         else if (wpn.type === 'RPG') {
-            this.projectiles.push(new Projectile(this.player.x, this.player.y, tx, ty, baseSpd*0.6, finalDamage, 0, wpn.type));
+            spawnProj(tx, ty);
         }
-        else if (wpn.type === 'Plasma') {
-            this.projectiles.push(new Projectile(this.player.x, this.player.y, tx, ty, baseSpd*2.5, finalDamage, this.player.pierce + 100, wpn.type));
-        }
-        else if (wpn.type === 'Acelerador') {
-            this.projectiles.push(new Projectile(this.player.x, this.player.y, tx, ty, baseSpd*4, finalDamage, Infinity, wpn.type));
-        }
-        else if (wpn.type === 'Mjolnir') {
-            this.projectiles.push(new Projectile(this.player.x, this.player.y, tx, ty, baseSpd*6, finalDamage, Infinity, wpn.type));
-            screenShake = 5;
-        }
-        else if (wpn.type === 'Laser') {
-            for(let i=0; i<3; i++) {
-                this.projectiles.push(new Projectile(this.player.x, this.player.y, tx + (Math.random()-0.5)*50, ty + (Math.random()-0.5)*50, baseSpd*10, finalDamage, Infinity, wpn.type));
-            }
-            screenShake = 10;
-            if(this.frames % 10 === 0) sounds.play('explosion');
+        else if (wpn.type === 'Plasma' || wpn.type === 'Acelerador' || wpn.type === 'Mjolnir' || wpn.type === 'Laser') {
+            spawnProj(tx, ty);
         }
 
         // Apply Ammo Box effect
         if (this.player.doubleShotTimer > 0 && wpn.type !== 'Shotgun') {
-            const angle = Math.atan2(ty - this.player.y, tx - this.player.x) + 0.2;
-            this.projectiles.push(new Projectile(this.player.x, this.player.y, this.player.x + Math.cos(angle), this.player.y + Math.sin(angle), baseSpd, finalDamage, this.player.pierce, wpn.type));
+            const angle = Math.atan2(ty - barrelY, tx - barrelX) + 0.2;
+            this.projectiles.push(new Projectile(barrelX, barrelY, barrelX + Math.cos(angle)*100, barrelY + Math.sin(angle)*100, baseSpd, finalDamage, this.player.pierce, wpn.type));
         }
 
-        this.player.shootCooldown = this.player.shootRate * wpn.fireRateMod * (1 - this.player.cooldownRed);
-        this.player.muzzleTimer = 5;
         sounds.play('shoot');
         if (isCrit) screenShake += 2;
     }
@@ -1237,6 +1274,23 @@ class GameEngine {
     update() {
         if (this.state !== 'PLAY') return;
         this.frames++;
+
+        // --- Dynamic Difficulty (Risk) Calculation ---
+        // Base risk increases with time and kills
+        let baseRisk = 1.0 + (this.frames / 36000) + (this.kills / 2000);
+        
+        // Progression risk increases with meta-upgrades and titles
+        let progressionRisk = 1.0;
+        if (metaUpgrades.activeTitle) progressionRisk += 0.5;
+        progressionRisk += (Object.values(metaUpgrades).reduce((a, b) => (typeof b === 'number' ? a + b : a), 0) * 0.05);
+        
+        // Item risk (Compostos increase the stakes)
+        let itemRisk = 1.0;
+        if (this.player.statMultiplier === 10) itemRisk = 2.0;
+        if (this.player.statMultiplier === 1000) itemRisk = 5.0;
+        if (this.player.statMultiplier === 10000) itemRisk = 20.0;
+
+        this.difficultyFactor = baseRisk * progressionRisk * itemRisk;
 
         camera.x = this.player.x - canvas.width / 2; camera.y = this.player.y - canvas.height / 2;
 
@@ -1252,8 +1306,8 @@ class GameEngine {
             const angle = Math.random() * Math.PI * 2; const dist = Math.max(canvas.width, canvas.height) / 2 + 100;
             const x = this.player.x + Math.cos(angle) * dist; const y = this.player.y + Math.sin(angle) * dist;
             
-            // New Scaling: 20k, 40k, 80k...
-            let hpMult = Math.pow(2, this.bossesSpawned - 1);
+            // Boss health scales with spawns AND risk
+            let hpMult = Math.pow(2, this.bossesSpawned - 1) * this.difficultyFactor;
             let boss = new Enemy(x, y, 'boss', hpMult);
             boss.maxHp = 20000 * hpMult; boss.hp = boss.maxHp;
             this.enemies.push(boss);
@@ -1333,7 +1387,7 @@ class GameEngine {
                         // Explosion Area Damage
                         this.fires.push(new FireArea(p.x, p.y)); 
                         for(let e2 of this.enemies) {
-                            if (Math.hypot(e2.x - p.x, e2.y - p.y) < 80) e2.hp -= p.damage;
+                            if (Math.hypot(e2.x - p.x, e2.y - p.y) < 140) e2.hp -= p.damage;
                         }
                         p.active = false;
                         screenShake = 8;
@@ -1379,7 +1433,12 @@ class GameEngine {
 
                         this.enemies.splice(j, 1);
                         this.kills += 1;
-                        totalKills += 1;
+                        
+                        // Meta-progression reward scaling:
+                        // Total kills earned = 1 (base) * difficultyFactor
+                        const earnedKills = Math.max(1, Math.floor(this.difficultyFactor));
+                        totalKills += earnedKills;
+                        
                         if (this.kills % 5 === 0) saveMeta(); 
 
                         // Title: Lifesteal (Optimized)
@@ -1417,9 +1476,13 @@ class GameEngine {
                     const equippedWpn = this.player.getEquipped();
                     const weaponXpMult = equippedWpn ? equippedWpn.rarity.xpBonus : 1;
                     const val = d.value || 2;
-                    this.xp += val * this.player.xpMultiplier * weaponXpMult;
+                    // XP scales with Risk
+                    this.xp += val * this.player.xpMultiplier * weaponXpMult * this.difficultyFactor;
                     if (this.xp >= this.maxXp) this.triggerLevelUp();
-                } else if (d.type === 'supply') { this.supplies++; } 
+                } else if (d.type === 'supply') { 
+                    // Supplies can drop in stacks on high risk
+                    this.supplies += Math.max(1, Math.floor(this.difficultyFactor * 0.5)); 
+                } 
                 else if (d.type === 'health') { this.player.hp = Math.min(this.player.maxHp, this.player.hp + 20); } 
                 else if (d.type === 'ammo') { this.player.doubleShotTimer = 600; }
                 else if (d.type === 'weapon') {
@@ -1465,8 +1528,8 @@ class GameEngine {
                 // Title: Shield
                 if (this.player.shieldActive) continue;
 
-                // Title: Defense
-                let dmg = 0.5 * (1 - this.player.defense / 100);
+                // Title: Defense & Risk-based Damage
+                let dmg = 0.5 * (1 - this.player.defense / 100) * Math.sqrt(game.difficultyFactor);
                 this.player.hp -= dmg; this.updateHUD(); screenShake = 1;
                 if (this.player.hp <= 0) this.gameOver();
             }
@@ -1515,8 +1578,8 @@ class GameEngine {
     gameOver() {
         this.state = 'GAMEOVER'; 
         
-        // Apply Score Multiplier (Meta-progression only)
-        const earnedKills = Math.floor(this.kills * (1 + metaUpgrades.scoreMult * 0.2));
+        // Final score bonus based on risk
+        const earnedKills = Math.floor(this.kills * (1 + metaUpgrades.scoreMult * 0.2) * this.difficultyFactor);
         totalKills += earnedKills;
         saveMeta();
 
@@ -1547,6 +1610,10 @@ muteBtn.addEventListener('click', (e) => {
     muteBtn.innerText = enabled ? "🔇 MUTE" : "🔊 UNMUTE";
 });
 speedBtn.addEventListener('click', (e) => { e.target.blur(); game.toggleSpeed(); });
+document.getElementById('inGameMenuBtn').addEventListener('click', (e) => {
+    e.target.blur();
+    game.goToMenu();
+});
 
 // Index Logic
 const indexScreen = document.getElementById('indexScreen');
